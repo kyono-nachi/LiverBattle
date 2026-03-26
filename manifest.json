@@ -2,7 +2,7 @@
   "name": "LiverBattle",
   "short_name": "LiverBattle",
   "description": "LiverBattle - Fighter Selection & Battle Game",
-  "start_url": "/fighter-select/",
+  "start_url": "/LiverBattle/",
   "display": "fullscreen",
   "orientation": "portrait",
   "background_color": "#000000",

@@ -500,19 +500,19 @@ html, body {
   justify-content:center;
 }
 .vs-half.top {
-  background:linear-gradient(160deg,#0d0d20 0%,#080810 100%);
+  background:linear-gradient(160deg,#200d04 0%,#100806 100%);
 }
 .vs-half.bot {
-  background:linear-gradient(340deg,#100c04 0%,#080806 100%);
+  background:linear-gradient(340deg,#0d1020 0%,#080810 100%);
 }
 .vs-half.top::after {
   content:''; position:absolute; inset:0;
-  background:radial-gradient(ellipse at 50% 80%, #38d9f510 0%, transparent 70%);
+  background:radial-gradient(ellipse at 50% 80%, #ff8c0010 0%, transparent 70%);
   pointer-events:none;
 }
 .vs-half.bot::after {
   content:''; position:absolute; inset:0;
-  background:radial-gradient(ellipse at 50% 20%, #ff8c0010 0%, transparent 70%);
+  background:radial-gradient(ellipse at 50% 20%, #38d9f510 0%, transparent 70%);
   pointer-events:none;
 }
 
@@ -961,6 +961,15 @@ body::after {
 .rule-desc { font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#888; margin-left:4px; }
 .rule-text { font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#888; line-height:1.7; }
 .rule-row-sm { font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#666; line-height:1.6; }
+.rule-skip-row {
+  padding:6px 0 2px;
+  border-top:1px solid #1a1a2a;
+}
+.rule-skip-label {
+  display:flex; align-items:center; gap:8px; cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#666;
+}
+.rule-skip-label input { accent-color:var(--p1c); width:14px; height:14px; cursor:pointer; }
 .rule-close-btn {
   align-self:stretch; margin-top:6px; padding:10px;
   background:#111; border:none; border-top:1px solid #2a2a40;
@@ -1264,9 +1273,9 @@ body::after {
         <!-- 基本ルール -->
         <div class="rule-section">
           <div class="rule-sec-title">基本ルール</div>
-          <div class="rule-row"><span class="rule-icon">⚔️</span><span class="rule-beats">→</span><span class="rule-icon">🛡️</span><span class="rule-desc">アタックはバリアに勝つ</span></div>
-          <div class="rule-row"><span class="rule-icon">🛡️</span><span class="rule-beats">→</span><span class="rule-icon">✨</span><span class="rule-desc">バリアはマジックを反射</span></div>
-          <div class="rule-row"><span class="rule-icon">✨</span><span class="rule-beats">→</span><span class="rule-icon">⚔️</span><span class="rule-desc">マジックはアタックに勝つ</span></div>
+          <div class="rule-row"><span class="rule-icon">⚔️</span><span class="rule-beats">→</span><span class="rule-icon">🛡️</span><span class="rule-desc">アタックはバリアを突き破る</span></div>
+          <div class="rule-row"><span class="rule-icon">🛡️</span><span class="rule-beats">→</span><span class="rule-icon">✨</span><span class="rule-desc">バリアはマジックを反射する</span></div>
+          <div class="rule-row"><span class="rule-icon">✨</span><span class="rule-beats">→</span><span class="rule-icon">⚔️</span><span class="rule-desc">マジックはアタックを上回る</span></div>
         </div>
 
         <div class="rule-section">
@@ -1275,7 +1284,7 @@ body::after {
         </div>
         <div class="rule-section">
           <div class="rule-sec-title">連続使用禁止</div>
-          <div class="rule-text">同じ行動は2回連続で使えない。チャージ後もチャージは使用不可。</div>
+          <div class="rule-text">同じ行動は2回連続で使えない。</div>
         </div>
         <div class="rule-section">
           <div class="rule-sec-title">SPD先攻</div>
@@ -1284,12 +1293,18 @@ body::after {
         <div class="rule-section">
           <div class="rule-sec-title">マジックの種類（MP依存）</div>
           <div class="rule-row-sm">MP1〜3：ノーマル（高威力）のみ</div>
-          <div class="rule-row-sm">MP4〜6：＋スタン（次ターン行動不能）・デバフ（ステ低下）</div>
-          <div class="rule-row-sm">MP7＋固有技持ち：さらに固有技が使用可能</div>
+          <div class="rule-row-sm">MP4〜6：スタン（次ターン行動不能）・デバフ（ステ低下）</div>
+          <div class="rule-row-sm">MP7＋：2ターン目以降にユニークマジック（DEF軽減なし大ダメージ）が使用可能。</div>
         </div>
         <div class="rule-section">
           <div class="rule-sec-title">回避 / クリティカル</div>
-          <div class="rule-text">SPD・LUKで回避率が決まる。あいこ時は回避なし。LUKでクリティカル（×1.2）が発生することも。</div>
+          <div class="rule-text">SPD・LUKで回避率が決まる。LUKでクリティカル（×1.2）が発生することも。</div>
+        </div>
+        <div class="rule-skip-row">
+          <label class="rule-skip-label">
+            <input type="checkbox" id="rule-skip-check" onchange="onRuleSkipChange()">
+            次回以降バトル開始時に表示しない
+          </label>
         </div>
         <button class="rule-close-btn" onclick="closeRuleModal()">× CLOSE</button>
       </div>
@@ -2190,7 +2205,7 @@ function getMagicOptions(fighter) {
     opts.push({ type:'stun',   name:'スタン',   desc:'威力やや低＋次ターン行動不能' });
     opts.push({ type:'debuff', name:'デバフ',   desc:'威力やや低＋STR/DEF低下' });
   }
-  if (mp >= 7 && fighter.stats.hasUnique) {
+  if (mp >= 7 && fighter.stats.hasUnique && battle.turn >= 2) {
     opts.push({ type:'unique', name: fighter.stats.uniqueName, desc:'ユニークマジック・DEF無視' });
   }
   return opts;
@@ -2273,6 +2288,8 @@ function getSpdFirst(a, b) {
 
 /* ── 三すくみ勝敗判定（カットイン用） ── */
 function getMatchupWinner(p1a, p2a) {
+  if (p1a === 'stunned') return 'p2';
+  if (p2a === 'stunned') return 'p1';
   if (p1a === 'charge' && p2a === 'charge') return 'both';
   if (p1a === 'charge') return 'p2';
   if (p2a === 'charge') return 'p1';
@@ -2387,14 +2404,15 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
     case 'attack_attack': {
       msgs.push('アタック vs アタック！');
       const [first, second] = getSpdFirst(p1, p2);
-      // あいこは回避なし・必ず両者ダメージ。先攻でKOした場合のみ後攻行動不可
       const r1 = calcAtkDmg(first, second);
       second.currentHp = Math.max(0, second.currentHp - r1.dmg);
       msgs.push(`${first.stats.nameJp}（先攻）のアタック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
+      showHit(second === p1);
       if (second.currentHp > 0) {
         const r2 = calcAtkDmg(second, first);
         first.currentHp = Math.max(0, first.currentHp - r2.dmg);
         msgs.push(`${second.stats.nameJp}（後攻）のアタック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
+        showHit(first === p1);
       } else {
         msgs.push(`${second.stats.nameJp}は反撃できなかった...`);
       }
@@ -2418,10 +2436,12 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const d1 = calcBarrierDmg(first);
       second.currentHp = Math.max(0, second.currentHp - d1);
       msgs.push(`${first.stats.nameJp}（先攻）のバリア攻撃：${d1}ダメージ`);
+      showHit(second === p1);
       if (second.currentHp > 0) {
         const d2 = calcBarrierDmg(second);
         first.currentHp = Math.max(0, first.currentHp - d2);
         msgs.push(`${second.stats.nameJp}（後攻）のバリア攻撃：${d2}ダメージ`);
+        showHit(first === p1);
       } else {
         msgs.push(`${second.stats.nameJp}は反撃できなかった...`);
       }
@@ -2432,7 +2452,7 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const r = calcMagDmg(p2, p1, p2m);
       p2.currentHp = Math.max(0, p2.currentHp - r.dmg);
       msgs.push(`反射ダメージ：${r.dmg}`);
-      // 反射で倒れた場合は特殊効果を適用しない
+      showHit(false);
       if (p2.currentHp > 0 && p2m !== 'normal' && p2m !== 'unique') {
         if (eStat(p2,'mp') - eStat(p1,'def') >= 2) {
           msgs.push('特殊効果も跳ね返った！');
@@ -2452,6 +2472,7 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const r = calcMagDmg(p1, p2, p1m);
       p1.currentHp = Math.max(0, p1.currentHp - r.dmg);
       msgs.push(`反射ダメージ：${r.dmg}`);
+      showHit(true);
       if (p1.currentHp > 0 && p1m !== 'normal' && p1m !== 'unique') {
         if (eStat(p1,'mp') - eStat(p2,'def') >= 2) {
           msgs.push('特殊効果も跳ね返った！');
@@ -2468,11 +2489,13 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const r1 = calcMagDmg(first, second, fm);
       second.currentHp = Math.max(0, second.currentHp - r1.dmg);
       msgs.push(`${first.stats.nameJp}（先攻）のマジック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
+      showHit(second === p1);
       if (fm !== 'normal') applyEffect(second, fm, msgs);
       if (second.currentHp > 0) {
         const r2 = calcMagDmg(second, first, sm);
         first.currentHp = Math.max(0, first.currentHp - r2.dmg);
         msgs.push(`${second.stats.nameJp}（後攻）のマジック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
+        showHit(first === p1);
         if (sm !== 'normal') applyEffect(first, sm, msgs);
       } else {
         msgs.push(`${second.stats.nameJp}は反撃できなかった...`);
@@ -2501,25 +2524,30 @@ function confirmTurn() {
   if (!battle.p1.selectedAction) return;
   battle.phase = 'resolve';
 
-  const ai = getAIAction(battle.p2, battle.p1);
-  battle.p2.selectedAction = ai.action;
-  battle.p2.selectedMagicType = ai.magicType;
+  // p2がスタン中はAI行動なし
+  if (battle.p2.stunned) {
+    battle.p2.selectedAction = 'stunned';
+    battle.p2.selectedMagicType = null;
+  } else {
+    const ai = getAIAction(battle.p2, battle.p1);
+    battle.p2.selectedAction = ai.action;
+    battle.p2.selectedMagicType = ai.magicType;
+  }
 
-  // カットイン表示 → 解決
   const p1a = battle.p1.selectedAction;
   const p1m = battle.p1.selectedMagicType || 'normal';
   const p2a = battle.p2.selectedAction;
   const p2m = battle.p2.selectedMagicType || 'normal';
-  const winner = getMatchupWinner(p1a, p2a);
 
   $('enemy-action-reveal').textContent = getActName(p2a, p2m);
 
-  showCutIn(
-    getActName(p1a, p1m), '',
-    getActName(p2a, p2m), '',
-    winner,
-    () => resolveTurn()
-  );
+  // p2スタン時は専用カットイン
+  if (p2a === 'stunned') {
+    showCutIn(getActName(p1a, p1m), '', '⚡ STUN', '', 'p1', () => resolveTurn());
+  } else {
+    const winner = getMatchupWinner(p1a, p2a);
+    showCutIn(getActName(p1a, p1m), '', getActName(p2a, p2m), '', winner, () => resolveTurn());
+  }
 }
 
 /* ── カットインアニメーション ── */
@@ -2580,13 +2608,16 @@ function resolveTurn() {
   const msgs = [`【TURN ${battle.turn}】 ${getActName(p1a,p1m)} vs ${getActName(p2a,p2m)}`];
 
   if (p1a === 'stunned') {
+    // p1スタン：p2のみ行動
     msgs.push(`${p1.stats.nameJp}はスタンで行動できない！`);
     if (p2a === 'attack') {
       const r = calcAtkDmg(p2, p1); p1.currentHp = Math.max(0, p1.currentHp - r.dmg);
       msgs.push(`${p2.stats.nameJp}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(true);
     } else if (p2a === 'magic') {
       const r = calcMagDmg(p2, p1, p2m); p1.currentHp = Math.max(0, p1.currentHp - r.dmg);
       msgs.push(`${p2.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(true);
       if (p2m !== 'normal') applyEffect(p1, p2m, msgs);
     } else if (p2a === 'barrier') {
       msgs.push(`${p2.stats.nameJp}はバリアを構えた`);
@@ -2597,6 +2628,27 @@ function resolveTurn() {
       msgs.push(`${p2.stats.nameJp}はチャージ！HP+${rec}`);
     }
     p1.stunned = false;
+  } else if (p2a === 'stunned') {
+    // p2スタン：p1のみ行動
+    msgs.push(`${p2.stats.nameJp}はスタンで行動できない！`);
+    if (p1a === 'attack') {
+      const r = calcAtkDmg(p1, p2); p2.currentHp = Math.max(0, p2.currentHp - r.dmg);
+      msgs.push(`${p1.stats.nameJp}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(false);
+    } else if (p1a === 'magic') {
+      const r = calcMagDmg(p1, p2, p1m); p2.currentHp = Math.max(0, p2.currentHp - r.dmg);
+      msgs.push(`${p1.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(false);
+      if (p1m !== 'normal') applyEffect(p2, p1m, msgs);
+    } else if (p1a === 'barrier') {
+      msgs.push(`${p1.stats.nameJp}はバリアを構えた`);
+    } else if (p1a === 'charge') {
+      const rec = p1.stats.hp * CHARGE_RECOVER;
+      p1.currentHp = Math.min(p1.maxHp, p1.currentHp + rec);
+      p1.chargeBonus = true;
+      msgs.push(`${p1.stats.nameJp}はチャージ！HP+${rec}`);
+    }
+    p2.stunned = false;
   } else {
     processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs);
   }
@@ -2609,9 +2661,10 @@ function finalizeTurn(msgs) {
   if (p1.debuffStat && --p1.debuffStat.turns <= 0) p1.debuffStat = null;
   if (p2.debuffStat && --p2.debuffStat.turns <= 0) p2.debuffStat = null;
   if (p1.selectedAction !== 'stunned') p1.lastAction = p1.selectedAction;
-  p2.lastAction = p2.selectedAction;
-  if (p1.selectedAction !== 'charge') p1.chargeBonus = false;
-  if (p2.selectedAction !== 'charge') p2.chargeBonus = false;
+  if (p2.selectedAction !== 'stunned') p2.lastAction = p2.selectedAction;
+  // スタン中でもchargeBonus は維持する（前ターンのチャージが無駄にならないよう）
+  if (p1.selectedAction !== 'charge' && p1.selectedAction !== 'stunned') p1.chargeBonus = false;
+  if (p2.selectedAction !== 'charge' && p2.selectedAction !== 'stunned') p2.chargeBonus = false;
 
   // バトル統計を蓄積
   battle.stats.turns++;
@@ -2635,7 +2688,8 @@ function finalizeTurn(msgs) {
   updateBattleLog(msgs.join('\n'));
 
   // スタンターンはログを読む時間を長めに確保
-  const waitTime = (p1.selectedAction === 'stunned') ? T.STUN_RESULT : T.TURN_RESULT;
+  const isStunTurn = p1.selectedAction === 'stunned' || p2.selectedAction === 'stunned';
+  const waitTime = isStunTurn ? T.STUN_RESULT : T.TURN_RESULT;
   setTimeout(() => {
     if (p1.currentHp <= 0 && p2.currentHp <= 0) { endBattle('draw'); }
     else if (p1.currentHp <= 0) { endBattle('p2'); }
@@ -2800,6 +2854,10 @@ function startBattle() {
   }, T.VS_BADGE);
 
   updateBattleLog(`${p1stats.nameJp} VS ${p2stats.nameJp}\nバトル開始！`);
+  // ヘルプをバトル開始時に自動表示（次回以降表示しないが未設定の場合）
+  if (localStorage.getItem('liverbattle_skip_rule') !== '1') {
+    setTimeout(() => openRuleModal(), 300);
+  }
   setTimeout(prepareTurn, T.BATTLE_START);
 }
 
@@ -2820,6 +2878,7 @@ function prepareTurn() {
   $('b-turn-num').textContent = `TURN ${battle.turn}`;
   $('enemy-action-reveal').textContent = '';
 
+  // p1がスタン：プレイヤー行動不能
   if (p1.stunned) {
     $('battle-action-btns').style.display = 'none';
     $('magic-menu').style.display = 'none';
@@ -2827,7 +2886,6 @@ function prepareTurn() {
     $('battle-confirm-row').style.opacity = '0.3';
     battle.phase = 'resolve';
     updateBattleLog(`${p1.stats.nameJp}はスタンで行動できない！\n敵のターン...`);
-    // スタン専用カットイン → その後AI行動
     showCutIn('⚡ STUN', '', '', '', 'p2', () => {
       setTimeout(() => {
         const ai = getAIAction(p2, p1);
@@ -2840,9 +2898,18 @@ function prepareTurn() {
     return;
   }
 
+  // p2がスタン：敵行動不能・プレイヤーは自由に行動
+  if (p2.stunned) {
+    updateBattleLog(`${p2.stats.nameJp}はスタンで行動できない！\nコマンドを選択してください`);
+    p2.selectedAction = 'stunned'; p2.selectedMagicType = null;
+    // コマンド選択は通常通り。confirm後にresolveTurnでp2.selectedAction='stunned'を処理
+  }
+
   battle.phase = 'select';
   updateCommandButtons();
-  updateBattleLog(`TURN ${battle.turn} — コマンドを選択して「戦闘開始」を押してください`);
+  if (!p2.stunned) {
+    updateBattleLog(`TURN ${battle.turn} — コマンドを選択して「戦闘開始」を押してください`);
+  }
 }
 
 /* ── コマンドボタン管理 ── */
@@ -2930,8 +2997,16 @@ function selectMagic(type, name) {
 }
 
 /* ── ルールモーダル ── */
-function openRuleModal()  { $('rule-modal').classList.add('show'); }
+function openRuleModal() {
+  $('rule-modal').classList.add('show');
+  // チェックボックスの状態を反映
+  const skip = localStorage.getItem('liverbattle_skip_rule') === '1';
+  $('rule-skip-check').checked = skip;
+}
 function closeRuleModal() { $('rule-modal').classList.remove('show'); }
+function onRuleSkipChange() {
+  localStorage.setItem('liverbattle_skip_rule', $('rule-skip-check').checked ? '1' : '0');
+}
 
 /* ── バトル終了 ── */
 function endBattle(winner) {

@@ -13,7 +13,12 @@
       "stats": {
         "nameJp": "京野なち",
         "job": "交渉人",
-        "hp": 3, "str": 7, "def": 3, "spd": 7, "mp": 2, "luk": 3,
+        "hp": 3,
+        "str": 7,
+        "def": 3,
+        "spd": 7,
+        "mp": 2,
+        "luk": 3,
         "hasUnique": true,
         "uniqueName": "閃光刀華"
       }
@@ -31,7 +36,40 @@
       "stats": {
         "nameJp": "幻海ココ",
         "job": "奇術師",
-        "hp": 3, "str": 2, "def": 2, "spd": 6, "mp": 7, "luk": 5,
+        "hp": 3,
+        "str": 2,
+        "def": 2,
+        "spd": 6,
+        "mp": 7,
+        "luk": 5,
+        "hasUnique": true,
+        "uniqueName": "蒼海繚乱"
+      }
+    },
+    {
+      "id": "c2b",
+      "charId": "c2b",
+      "jp": "奇術師オルタ",
+      "color": "#1a1a3a",
+      "colorLabel": "β",
+      "face": "image/boss_face.png",
+      "bg": "image/boss_bg_02.png",
+      "vs": "image/boss_vs_02.png",
+      "card": "image/boss_card.png",
+      "baseFace": "image/face_02.png",
+      "baseBg": "image/bg_02.png",
+      "baseVs": "image/vs_02.png",
+      "isNpcOnly": true,
+      "isBoss": true,
+      "stats": {
+        "nameJp": "幻海ココ",
+        "job": "奇術師オルタ",
+        "hp": 7,
+        "str": 1,
+        "def": 1,
+        "spd": 6,
+        "mp": 9,
+        "luk": 7,
         "hasUnique": true,
         "uniqueName": "蒼海繚乱"
       }
@@ -49,9 +87,42 @@
       "stats": {
         "nameJp": "幻海ココ",
         "job": "修道女",
-        "hp": 5, "str": 7, "def": 2, "spd": 1, "mp": 3, "luk": 7,
+        "hp": 5,
+        "str": 7,
+        "def": 2,
+        "spd": 1,
+        "mp": 3,
+        "luk": 7,
         "hasUnique": true,
         "uniqueName": "むきむきマッスル"
+      }
+    },
+    {
+      "id": "c3b",
+      "charId": "c3b",
+      "jp": "修道女オルタ",
+      "color": "#1a0a0a",
+      "colorLabel": "β",
+      "face": "image/boss_face.png",
+      "bg": "image/boss_bg_03.png",
+      "vs": "image/boss_vs_03.png",
+      "card": "image/boss_card.png",
+      "baseFace": "image/face_03.png",
+      "baseBg": "image/bg_03.png",
+      "baseVs": "image/vs_03.png",
+      "isNpcOnly": true,
+      "isBoss": true,
+      "stats": {
+        "nameJp": "幻海ココ",
+        "job": "修道女オルタ",
+        "hp": 9,
+        "str": 8,
+        "def": 9,
+        "spd": 1,
+        "mp": 1,
+        "luk": 3,
+        "hasUnique": false,
+        "uniqueName": ""
       }
     },
     {
@@ -67,7 +138,12 @@
       "stats": {
         "nameJp": "幻海ココ",
         "job": "国家公務員",
-        "hp": 3, "str": 3, "def": 4, "spd": 7, "mp": 4, "luk": 4,
+        "hp": 3,
+        "str": 3,
+        "def": 4,
+        "spd": 7,
+        "mp": 4,
+        "luk": 4,
         "hasUnique": true,
         "uniqueName": "深星煌"
       }
@@ -85,7 +161,12 @@
       "stats": {
         "nameJp": "幻海ココ",
         "job": "ホスト",
-        "hp": 5, "str": 5, "def": 2, "spd": 3, "mp": 7, "luk": 3,
+        "hp": 5,
+        "str": 5,
+        "def": 2,
+        "spd": 3,
+        "mp": 7,
+        "luk": 3,
         "hasUnique": true,
         "uniqueName": "シャンパンコールだ！！！"
       }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>LiverBattle v1.1</title>
+<title>LiverBattle v1.2</title>
   <!-- PWA / アイコン設定 -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/x-icon" href="icons/favicon.ico">
@@ -49,8 +49,6 @@ html, body {
   display:flex;
   flex-direction:column;
 }
-
-/* ── BACKGROUND ── */
 #bg-fx {
   position:absolute; inset:0; z-index:0; pointer-events:none;
 }
@@ -520,7 +518,19 @@ html, body {
 #vs-wrap-p1.in { transform:translateX(0); }
 #vs-wrap-p2.in { transform:translateX(0); }
 
-/* 16:9透過PNG — coverで画面いっぱいに */
+/* ボス登場：ズームアウト+フェードで出現 */
+#vs-wrap-p1.boss-in,
+#vs-wrap-p2.boss-in {
+  transform:translateX(0);
+  animation: boss-appear 0.7s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+@keyframes boss-appear {
+  0%   { opacity:0; transform:scale(1.1); filter:blur(12px); }
+  60%  { opacity:0.9; filter:blur(2px); }
+  100% { opacity:1; transform:scale(1); filter:blur(0); }
+}
+
+/* VS画像 — 縦幅に合わせてスケール、横からスライドイン */
 .vs-char-wrap canvas {
   width:100%; height:100%;
   object-fit:contain; object-position:center center;
@@ -1322,7 +1332,7 @@ body::after {
           <div class="rule-sec-title">マジックの種類（MP依存）</div>
           <div class="rule-row-sm">MP1〜3：ノーマル（高威力）のみ</div>
           <div class="rule-row-sm">MP4〜6：スタン（次ターン行動不能）・デバフ（ステ低下）</div>
-          <div class="rule-row-sm">MP7＋：2ターン目以降にユニークマジック（DEF軽減なし大ダメージ）が使用可能。</div>
+          <div class="rule-row-sm">MP7＋：チャージ後のターンにユニークマジック（DEF無視大ダメージ）が使用可能。使用後は一度別の行動が必要。</div>
         </div>
         <div class="rule-section">
           <div class="rule-sec-title">回避 / クリティカル</div>
@@ -1356,6 +1366,9 @@ body::after {
 </div>
 
 <script>
+// ── ユーティリティ ──
+const $ = id => document.getElementById(id);
+
 /* =====================================================
    キャラクターデータ
    icon : カルーセル用画像（正方形推奨）
@@ -1370,6 +1383,8 @@ const CHARS_DEFAULT = [
   { id:'c4a', charId:'c4', jp:'西洋長剣正装幻海', color:'#c8b060', colorLabel:'A', face:'image/face_04.png', bg:'image/bg_04.png', vs:'image/vs_04.png', card:'image/card_04.png' },
   { id:'c5a', charId:'c5', jp:'魔導拳鎧接待幻海', color:'#9090c8', colorLabel:'A', face:'image/face_05.png', bg:'image/bg_05.png', vs:'image/vs_05.png', card:'image/card_05.png' },
   { id:'rnd',  charId:'rnd', jp:'ランダム', color:'#556677', colorLabel:'', face:'', bg:'', vs:'', card:'', isRandom:true },
+  { id:'c2b', charId:'c2b', jp:'奇術師オルタ', color:'#1a1a3a', colorLabel:'β', face:'image/boss_face.png', bg:'image/boss_bg_02.png', vs:'image/boss_vs_02.png', card:'image/boss_card.png', baseFace:'image/face_02.png', baseBg:'image/bg_02.png', baseVs:'image/vs_02.png', isNpcOnly:true, isBoss:true },
+  { id:'c3b', charId:'c3b', jp:'修道女オルタ', color:'#1a0a0a', colorLabel:'β', face:'image/boss_face.png', bg:'image/boss_bg_03.png', vs:'image/boss_vs_03.png', card:'image/boss_card.png', baseFace:'image/face_03.png', baseBg:'image/bg_03.png', baseVs:'image/vs_03.png', isNpcOnly:true, isBoss:true },
 ];
 
 let CHARS = [];
@@ -1380,8 +1395,14 @@ async function loadChars() {
     if (!res.ok) throw new Error('fetch failed');
     const data = await res.json();
     CHARS = data.characters;
-    // ランダム枠はJSONに含めず、常にコードで末尾に追加
-    CHARS.push({ id:'rnd', charId:'rnd', jp:'ランダム', color:'#556677', colorLabel:'', face:'', bg:'', vs:'', card:'', isRandom:true });
+    const rndEntry = { id:'rnd', charId:'rnd', jp:'ランダム', color:'#556677', colorLabel:'', face:'', bg:'', vs:'', card:'', isRandom:true };
+    // ボスの前にランダムを挿入（ボスがなければ末尾）
+    const bossIdx = data.characters.findIndex(c => c.isNpcOnly);
+    if (bossIdx >= 0) {
+      CHARS.splice(bossIdx, 0, rndEntry);
+    } else {
+      CHARS.push(rndEntry);
+    }
     // chars.jsonのstatsからCHAR_STATSを上書き構築
     data.characters.forEach(ch => {
       if (ch.stats && ch.charId && ch.charId !== 'rnd') {
@@ -1444,6 +1465,30 @@ function drawPlaceholder(canvas, char, flip=false, mini=false) {
   ctx.restore();
 }
 
+/* ── ボスシルエット描画（canvas） ── */
+function drawSilhouette(canvas, src, color) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(img, 0, 0, W, H);
+    // ピクセルを黒に塗りつぶし（アルファ保持）
+    const d = ctx.getImageData(0, 0, W, H);
+    for (let i = 0; i < d.data.length; i += 4) {
+      if (d.data[i+3] > 10) {
+        d.data[i]   = 10;
+        d.data[i+1] = 10;
+        d.data[i+2] = 20;
+      }
+    }
+    ctx.putImageData(d, 0, 0);
+  };
+  img.onerror = () => drawPlaceholder(canvas, { color: color || '#111' });
+  img.crossOrigin = 'anonymous';
+  img.src = src;
+}
+
 function drawIconPlaceholder(canvas, char) {
   const ctx=canvas.getContext('2d');
   const W=canvas.width, H=canvas.height;
@@ -1490,7 +1535,35 @@ function buildCarousel() {
     const inner = document.createElement('div'); inner.className = 'c-inner';
     const pulse = document.createElement('div'); pulse.className = 'c-pulse';
 
-    if (ch.face) {
+    if (ch.isRandom) {
+      const cvs = document.createElement('canvas');
+      cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
+      drawIconPlaceholder(cvs, ch);
+      inner.appendChild(cvs);
+    } else if (ch.isBoss) {
+      // ボス：専用画像 or ベース画像をシルエット化
+      const cvs = document.createElement('canvas');
+      cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
+      inner.appendChild(cvs);
+      // 専用顔画像を試みる → 失敗したらベース画像でシルエット
+      const testImg = new Image();
+      testImg.onload = () => {
+        const ctx = cvs.getContext('2d');
+        ctx.drawImage(testImg, 0, 0, 72, 72);
+        const d = ctx.getImageData(0, 0, 72, 72);
+        for (let i = 0; i < d.data.length; i += 4) {
+          if (d.data[i+3] > 10) { d.data[i]=10; d.data[i+1]=10; d.data[i+2]=20; }
+        }
+        ctx.putImageData(d, 0, 0);
+      };
+      testImg.onerror = () => drawSilhouette(cvs, ch.baseFace, ch.color);
+      testImg.src = ch.face;
+      // NPC限定ラベル
+      const npcTag = document.createElement('div');
+      npcTag.style.cssText = 'position:absolute;bottom:2px;left:0;right:0;text-align:center;font-family:"Bebas Neue",sans-serif;font-size:7px;letter-spacing:2px;color:#ff4444;pointer-events:none;';
+      npcTag.textContent = 'NPC ONLY';
+      inner.appendChild(npcTag);
+    } else if (ch.face) {
       const img = document.createElement('img');
       img.className = 'c-img'; img.src = ch.face; img.alt = ch.jp;
       img.style.display = 'block';
@@ -1558,15 +1631,17 @@ function applyCarousel(idx, animate=true) {
 /* ── Move cursor ── */
 function moveTo(idx, preview=true, dir=0) {
   const len = CHARS.length;
-  // ループ（端を超えたら反対側へ）
   idx = ((idx % len) + len) % len;
-  // P2フェーズ: P1が通常キャラ選択時のみ同じカードをスキップ（ランダム選択時はスキップなし）
-  if (state.phase === 'p2' && state.p1.char && !CHARS[state.p1.idx].isRandom) {
-    let tries = 0;
-    while (tries < len && CHARS[idx] && CHARS[idx].id === state.p1.char.id) {
-      idx = ((idx + (dir >= 0 ? 1 : -1)) % len + len) % len;
-      tries++;
-    }
+  const step = dir >= 0 ? 1 : -1;
+  let tries = 0;
+  // P1：ボスをスキップ / P2：P1と同じカードをスキップ（ランダム選択時除く）
+  while (tries < len) {
+    const ch = CHARS[idx];
+    const skipBoss = state.phase === 'p1' && ch && ch.isNpcOnly;
+    const skipSame = state.phase === 'p2' && state.p1.char && !CHARS[state.p1.idx].isRandom && ch && ch.id === state.p1.char.id;
+    if (!skipBoss && !skipSame) break;
+    idx = ((idx + step) % len + len) % len;
+    tries++;
   }
   state.curIdx = idx;
   applyCarousel(idx);
@@ -1624,6 +1699,15 @@ function showPreview(char) {
     // 名前欄も非表示
     nameEl.classList.remove('show');
     return;
+  } else if (char.isBoss) {
+    // ボス：専用bg画像 → 失敗したらベース画像をシルエット化
+    artMain.style.display='none';
+    phMain.style.display='block';
+    phMain.style.opacity='1';
+    const testBossImg = new Image();
+    testBossImg.onload = () => { artMain.src=char.bg; artMain.style.display='block'; phMain.style.display='none'; };
+    testBossImg.onerror = () => drawSilhouette(phMain, char.baseBg || char.baseFace, char.color);
+    testBossImg.src = char.bg;
   } else {
     artMain.onerror = () => {
       artMain.style.display='none';
@@ -1655,6 +1739,8 @@ function onDecide() {
   if (ph!=='p1' && ph!=='p2') return;
 
   let char = CHARS[state.curIdx];
+  // P1はボスを選択できない
+  if (ph === 'p1' && char.isNpcOnly) return;
   if (char.isRandom) {
     // ランダム解決は両者決定後にstartIntro直前で行う
     // ここでは仮キャラとして自分自身を保持（isRandomフラグ付き）
@@ -1672,7 +1758,7 @@ function onDecide() {
   const cards = track.querySelectorAll('.c-card');
   cards[state.curIdx].querySelector(`.c-badge.${ph}`).style.display='flex';
 
-  flash(); playConfirm();
+  flash(); SE.confirm();
 
   if (ph==='p1') {
     // P1 locked — switch to P2
@@ -1682,7 +1768,7 @@ function onDecide() {
     let nextIdx = (state.p1.idx + 1) % (CHARS.length - 1);
     for (let n = 0; n < CHARS.length; n++) {
       const c = CHARS[nextIdx];
-      if (!c.isRandom && (!p1char || c.id !== p1char.id)) break;
+      if (!c.isRandom && !c.isNpcOnly && (!p1char || c.id !== p1char.id)) break;
       nextIdx = (nextIdx + 1) % (CHARS.length - 1);
     }
     state.curIdx = nextIdx;
@@ -1695,7 +1781,7 @@ function onDecide() {
     state.phase='intro';
     updatePhaseUI();
     resolveRandom();
-    setTimeout(startIntro, 400);
+    setTimeout(startIntro, T.INTRO_DELAY);
   }
 }
 
@@ -1710,9 +1796,16 @@ function updatePhaseUI() {
   const allCards = track.querySelectorAll('.c-card');
   allCards.forEach((c, i) => {
     const ch = CHARS[i];
-    const blocked = !otherIsRandom && otherChar && ch && ch.id === otherChar.id;
-    c.style.opacity = blocked ? '0.25' : '';
-    c.style.pointerEvents = blocked ? 'none' : '';
+    const blockedByOther = !otherIsRandom && otherChar && ch && ch.id === otherChar.id;
+    const blockedByNpc = ph === 'p1' && ch && ch.isNpcOnly;
+    if (blockedByNpc) {
+      // P1フェーズではボスカードを完全非表示
+      c.style.display = 'none';
+    } else {
+      c.style.display = '';
+      c.style.opacity = blockedByOther ? '0.25' : '';
+      c.style.pointerEvents = blockedByOther ? 'none' : '';
+    }
   });
   const btn = $('decide-btn');
   btn.classList.toggle('p2', ph==='p2');
@@ -1764,10 +1857,36 @@ function startIntro() {
 
   $('vs-name-p2').textContent = p2char ? p2char.jp : '？？？';
   $('vs-name-p1').textContent = p1char ? p1char.jp : '？？？';
+
+  // ボスが上（p2）にいる時は上ブロックのみピンクに
+  $('vs-top').style.background = (p2char && p2char.isBoss) ? BOSS_COLOR : '';
+  $('vs-bot').style.background = (p1char && p1char.isBoss) ? BOSS_COLOR : '';
+  $('vs-top').classList.toggle('boss', !!(p2char && p2char.isBoss));
+  $('vs-bot').classList.toggle('boss', !!(p1char && p1char.isBoss));
   $('vs-screen').classList.add('show');
 
-  setTimeout(() => { $('vs-wrap-p2').classList.add('in'); $('vs-name-p2').classList.add('show'); }, T.VS_P2_SLIDE);
-  setTimeout(() => { $('vs-wrap-p1').classList.add('in'); $('vs-name-p1').classList.add('show'); }, T.VS_P1_SLIDE);
+  const p2IsBoss = !!(p2char && p2char.isBoss);
+  const p1IsBoss = !!(p1char && p1char.isBoss);
+
+  // P2登場（上ブロック）
+  setTimeout(() => {
+    if (p2IsBoss) {
+      $('vs-wrap-p2').classList.add('boss-in');
+    } else {
+      $('vs-wrap-p2').classList.add('in');
+    }
+    $('vs-name-p2').classList.add('show');
+  }, T.VS_P2_SLIDE);
+
+  // P1登場（下ブロック）
+  setTimeout(() => {
+    if (p1IsBoss) {
+      $('vs-wrap-p1').classList.add('boss-in');
+    } else {
+      $('vs-wrap-p1').classList.add('in');
+    }
+    $('vs-name-p1').classList.add('show');
+  }, T.VS_P1_SLIDE);
   setTimeout(() => $('vs-badge').classList.add('show'), T.VS_BADGE);
   setTimeout(() => { $('slash').classList.add('on'); spawnSparks(); }, T.VS_SLASH);
   setTimeout(() => flash(true), T.VS_FLASH);
@@ -1778,8 +1897,12 @@ function startIntro() {
 function resetAll() {
   $('blackout').classList.remove('on');
   $('slash').classList.remove('on');
+  $('vs-top').style.background = '';
+  $('vs-bot').style.background = '';
+  $('vs-top').classList.remove('boss');
+  $('vs-bot').classList.remove('boss');
   $('vs-screen').classList.remove('show');
-  ['vs-wrap-p1','vs-wrap-p2'].forEach(id => $(id).classList.remove('in'));
+  ['vs-wrap-p1','vs-wrap-p2'].forEach(id => $(id).classList.remove('in', 'boss-in'));
   ['vs-name-p1','vs-name-p2','vs-badge'].forEach(id => $(id).classList.remove('show'));
 
   state.phase='p1'; state.p1={idx:0,char:null}; state.p2={idx:0,char:null}; state.curIdx=0;
@@ -1886,12 +2009,10 @@ function spawnSparks() {
 function flash(big=false) {
   const f=$('flash');
   f.style.transition='opacity 0.05s'; f.style.opacity=big?'0.9':'0.5';
-  setTimeout(()=>{f.style.transition='opacity 0.25s'; f.style.opacity='0';},55);
+  setTimeout(()=>{f.style.transition='opacity 0.25s'; f.style.opacity='0';}, T.FLASH_HIDE);
 }
 
 /* ── Sound（無効化） ── */
-function playConfirm() {}
-
 /* ── SE（効果音）── Web Audio API対応スタブ
    将来の実装: AudioContext + OscillatorNode / AudioBuffer
    各メソッドを呼び出すだけで音が鳴るよう設計。
@@ -1925,9 +2046,9 @@ let currentChar = null;
 
 function openStatus() {
   if (!currentChar) return;
-  const modal = document.getElementById('status-modal');
-  const img   = document.getElementById('status-modal-img');
-  const noCard = document.getElementById('status-modal-no-card');
+  const modal = $('status-modal');
+  const img   = $('status-modal-img');
+  const noCard = $('status-modal-no-card');
   if (currentChar.card) {
     img.src = currentChar.card;
     img.style.display = 'block';
@@ -1944,7 +2065,7 @@ function openStatus() {
 }
 
 function closeStatus() {
-  document.getElementById('status-modal').classList.remove('show');
+  $('status-modal').classList.remove('show');
   resetZoom();
 }
 
@@ -1953,7 +2074,7 @@ const zoomState = { scale:1, x:0, y:0, minScale:1, maxScale:5 };
 let isPanning = false, panStart = {x:0, y:0}, panOrigin = {x:0, y:0};
 let lastPinchDist = 0;
 
-function getImg() { return document.getElementById('status-modal-img'); }
+function getImg() { return $('status-modal-img'); }
 
 function applyTransform() {
   const img = getImg();
@@ -1966,7 +2087,7 @@ function resetZoom() {
   if (img) {
     img.style.transition = 'transform 0.3s ease';
     applyTransform();
-    setTimeout(() => img.style.transition = '', 300);
+    setTimeout(() => img.style.transition = '', T.PRELOAD_HIDE);
   }
 }
 
@@ -2060,12 +2181,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // モーダル背景タップで閉じる
-  document.getElementById('status-modal').addEventListener('click', e => {
-    if (e.target === document.getElementById('status-modal')) closeStatus();
+  $('status-modal').addEventListener('click', e => {
+    if (e.target === $('status-modal')) closeStatus();
   });
 
   // 立ち絵エリア: スワイプ＋ダブルタップ/クリック
-  const display = document.getElementById('char-display');
+  const display = $('char-display');
   if (display) {
     let swipeStartX = 0, swipeStartY = 0, swipeMoved = false, lastTapTime = 0;
     display.addEventListener('touchstart', e => {
@@ -2140,8 +2261,8 @@ function preloadAll(onComplete) {
   let loaded = 0;
   const total = urls.length;
 
-  const bar = document.getElementById('preload-bar');
-  const pct = document.getElementById('preload-pct');
+  const bar = $('preload-bar');
+  const pct = $('preload-pct');
 
   function update() {
     loaded++;
@@ -2149,7 +2270,7 @@ function preloadAll(onComplete) {
     bar.style.width = p + '%';
     pct.textContent = p + '%';
     if (loaded >= total) {
-      setTimeout(onComplete, 300);
+      setTimeout(onComplete, T.PRELOAD_HIDE);
     }
   }
 
@@ -2166,9 +2287,9 @@ window.addEventListener('load', async () => {
   await loadChars();
   buildCarousel();
   preloadAll(() => {
-    const screen = document.getElementById('preload-screen');
+    const screen = $('preload-screen');
     screen.classList.add('fade-out');
-    setTimeout(() => { screen.style.display='none'; }, 650);
+    setTimeout(() => { screen.style.display='none'; }, T.SCREEN_HIDE);
 
     applyCarousel(0, false);
     showPreview(CHARS[0]);
@@ -2180,9 +2301,6 @@ window.addEventListener('load', async () => {
 /* ═══════════════════════════════════════════════════════
    BATTLE SYSTEM
 ═══════════════════════════════════════════════════════ */
-
-// ── ユーティリティ ──
-const $ = id => document.getElementById(id);
 
 // ── ゲーム定数 ──
 const HP_MULTIPLIER    = 30;   // HPステ → 実HP
@@ -2197,6 +2315,7 @@ const SURVIVE_BASE     = 15;   // 食いしばり基礎確率(%)
 const SURVIVE_LUK_MULT = 10;   // LUK × この値 + SURVIVE_BASE = 食いしばり率(%)
 const MAG_EFFECT_MULT  = 0.85; // スタン・デバフマジックの威力係数
 const BARRIER_DMG_MULT = 0.6;  // バリアvs バリアのダメージ係数
+const BOSS_COLOR       = '#FC2392'; // ボス戦VS背景色
 
 // ── タイミング定数（ms）──
 const T = {
@@ -2205,6 +2324,7 @@ const T = {
   SCREEN_HIDE:    650,  // プリロード画面非表示
   NAME_SHOW:      80,   // キャラ名フェードイン
   INTRO_DELAY:    400,  // P2決定→イントロ開始
+  RULE_SHOW:      300,  // バトル開始時ルール表示ディレイ
   VS_P2_SLIDE:    120,  // VSスクリーンP2スライドイン
   VS_P1_SLIDE:    320,  // VSスクリーンP1スライドイン
   VS_BADGE:       700,  // VSバッジ表示
@@ -2220,13 +2340,14 @@ const T = {
   TURN_RESULT:    800,  // 通常ターン結果→次ターン
   STUN_RESULT:    1500, // スタンターン結果→次ターン（長め）
   EVADE_ANIM:     550,  // 回避アニメ
-  EVADE_POPUP:    750,  // 回避ポップアップ
 };
 
 const CHAR_STATS = {
   'c1': { nameJp:'京野なち',  job:'交渉人',    hp:3, str:7, def:3, spd:7, mp:2, luk:3, hasUnique:true,  uniqueName:'閃光刀華' },
   'c2': { nameJp:'幻海ココ',  job:'奇術師',    hp:3, str:2, def:2, spd:6, mp:7, luk:5, hasUnique:true,  uniqueName:'蒼海繚乱' },
+  'c2b':{ nameJp:'幻海ココ',  job:'奇術師オルタ', hp:7, str:1, def:1, spd:6, mp:9, luk:7, hasUnique:true, uniqueName:'蒼海繚乱' },
   'c3': { nameJp:'幻海ココ',  job:'修道女',    hp:5, str:7, def:2, spd:1, mp:3, luk:7, hasUnique:true,  uniqueName:'むきむきマッスル' },
+  'c3b':{ nameJp:'幻海ココ',  job:'修道女オルタ', hp:9, str:8, def:9, spd:1, mp:1, luk:3, hasUnique:false, uniqueName:'' },
   'c4': { nameJp:'幻海ココ',  job:'国家公務員', hp:3, str:3, def:4, spd:7, mp:4, luk:4, hasUnique:true,  uniqueName:'深星煌' },
   'c5': { nameJp:'幻海ココ',  job:'ホスト',    hp:5, str:5, def:2, spd:3, mp:7, luk:3, hasUnique:true,  uniqueName:'シャンパンコールだ！！！' },
 };
@@ -2235,12 +2356,14 @@ function makeFighter(charData, statsData) {
   return {
     char: charData,
     stats: {...statsData},
+    logName: charData.isBoss ? statsData.job : (charData.jp ? charData.jp.slice(-4) : statsData.nameJp),
     maxHp: statsData.hp * HP_MULTIPLIER,
     currentHp: statsData.hp * HP_MULTIPLIER,
     lastAction: null,
     chargeBonus: false,
     stunned: false,
     debuffStat: null,
+    uniqueCooldown: false,  // ユニーク使用後のクールダウン
     selectedAction: null,
     selectedMagicType: null,
   };
@@ -2256,8 +2379,8 @@ function getMagicOptions(fighter) {
     opts.push({ type:'stun',   name:'スタン',   desc:'威力やや低＋次ターン行動不能' });
     opts.push({ type:'debuff', name:'デバフ',   desc:'威力やや低＋STR/DEF低下' });
   }
-  if (mp >= 7 && fighter.stats.hasUnique && battle.turn >= 2) {
-    opts.push({ type:'unique', name: fighter.stats.uniqueName, desc:'ユニークマジック・DEF無視' });
+  if (mp >= 7 && fighter.stats.hasUnique && fighter.chargeBonus && !fighter.uniqueCooldown) {
+    opts.push({ type:'unique', name: fighter.stats.uniqueName, desc:'ユニークマジック・DEF無視（チャージ後のみ）' });
   }
   return opts;
 }
@@ -2274,7 +2397,7 @@ function roll(pct) { return Math.random() * 100 < pct; }
 function luckyReduce(def, dmg, msgs) {
   if (roll(eStat(def,'luk') * LUCKY_REDUCE_MULT)) {
     const reduced = Math.floor(dmg / 2);
-    msgs.push(`✨ ${def.stats.nameJp}はLUKで被ダメを半減！（${dmg}→${reduced}）`);
+    msgs.push(`✨ ${def.logName}はLUKで被ダメを半減！（${dmg}→${reduced}）`);
     return reduced;
   }
   return dmg;
@@ -2366,44 +2489,44 @@ function getMatchupWinner(p1a, p2a) {
 function applyEffect(target, mtype, msgs) {
   const resist = roll(eStat(target,'luk') * RESIST_LUK_MULT);
   if (mtype === 'stun') {
-    if (resist) msgs.push(`${target.stats.nameJp}はスタンに抵抗した！`);
-    else { target.stunned = true; msgs.push(`${target.stats.nameJp}がスタン状態に！`); }
+    if (resist) msgs.push(`${target.logName}はスタンに抵抗した！`);
+    else { target.stunned = true; msgs.push(`${target.logName}がスタン状態に！`); }
   } else if (mtype === 'debuff') {
-    if (resist) msgs.push(`${target.stats.nameJp}はデバフに抵抗した！`);
+    if (resist) msgs.push(`${target.logName}はデバフに抵抗した！`);
     else {
       // STR/DEFのみ（攻防に直結するステータスに絞る）
       const stats = ['str', 'def'];
       const stat = stats[Math.floor(Math.random() * stats.length)];
       const nm = {str:'STR', def:'DEF'};
       target.debuffStat = { stat, turns:1 };
-      msgs.push(`${target.stats.nameJp}の${nm[stat]}が低下！（1ターン）`);
+      msgs.push(`${target.logName}の${nm[stat]}が低下！（1ターン）`);
     }
   } else if (mtype === 'unique') {
-    msgs.push(`✨ ${target.stats.nameJp}に固有技がヒット！`);
+    msgs.push(`✨ ${target.logName}に固有技がヒット！`);
   }
 }
 
 /* ── チャージ処理（食いしばりはここのみ） ── */
 function processCharge(charger, opp, oppAction, oppMtype, msgs) {
   const chargerIsP1 = charger === battle.p1;
-  msgs.push(`${charger.stats.nameJp}はチャージ！`);
+  msgs.push(`${charger.logName}はチャージ！`);
   if (oppAction === 'attack') {
     const r = calcAtkDmg(opp, charger);
     const dmg = luckyReduce(charger, r.dmg, msgs);
     charger.currentHp -= dmg;
-    msgs.push(`${opp.stats.nameJp}のアタックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    msgs.push(`${opp.logName}のアタックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(chargerIsP1);
   } else if (oppAction === 'barrier') {
     const d = calcBarrierDmg(opp);
     const dmg = luckyReduce(charger, d, msgs);
     charger.currentHp -= dmg;
-    msgs.push(`${opp.stats.nameJp}のバリア攻撃が直撃！${d}ダメージ`);
+    msgs.push(`${opp.logName}のバリア攻撃が直撃！${d}ダメージ`);
     showHit(chargerIsP1);
   } else if (oppAction === 'magic') {
     const r = calcMagDmg(opp, charger, oppMtype);
     const dmg = luckyReduce(charger, r.dmg, msgs);
     charger.currentHp -= dmg;
-    msgs.push(`${opp.stats.nameJp}のマジックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    msgs.push(`${opp.logName}のマジックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(chargerIsP1);
     if (oppMtype !== 'normal') applyEffect(charger, oppMtype, msgs);
   }
@@ -2417,9 +2540,9 @@ function processCharge(charger, opp, oppAction, oppMtype, msgs) {
     if (roll(rate)) {
       charger.currentHp = 1;
       charger.chargeBonus = true;
-      msgs.push(`⚡ ${charger.stats.nameJp}は食いしばった！（HP1）`);
+      msgs.push(`⚡ ${charger.logName}は食いしばった！（HP1）`);
     } else {
-      msgs.push(`${charger.stats.nameJp}はチャージ中に倒れた...`);
+      msgs.push(`${charger.logName}はチャージ中に倒れた...`);
     }
   } else {
     charger.chargeBonus = true;
@@ -2433,36 +2556,36 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
   function atkHit(att, def, label) {
     if (dodge(att, def)) {
       showEvade(def === p1);
-      msgs.push(`★EVADE★ ${def.stats.nameJp}は${label}を回避！`); return 0;
+      msgs.push(`★EVADE★ ${def.logName}は${label}を回避！`); return 0;
     }
     const r = calcAtkDmg(att, def);
     const dmg = luckyReduce(def, r.dmg, msgs);
     def.currentHp = Math.max(0, def.currentHp - dmg);
-    msgs.push(`${att.stats.nameJp}の${label}：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    msgs.push(`${att.logName}の${label}：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(def === p1);
     return dmg;
   }
   function magHit(att, mtype, def) {
     if (dodge(att, def)) {
       showEvade(def === p1);
-      msgs.push(`★EVADE★ ${def.stats.nameJp}はマジックを回避！`); return false;
+      msgs.push(`★EVADE★ ${def.logName}はマジックを回避！`); return false;
     }
     const r = calcMagDmg(att, def, mtype);
     const dmg = luckyReduce(def, r.dmg, msgs);
     def.currentHp = Math.max(0, def.currentHp - dmg);
-    msgs.push(`${att.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    msgs.push(`${att.logName}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(def === p1);
     return true;
   }
   function barHit(att, def) {
     if (dodge(att, def)) {
       showEvade(def === p1);
-      msgs.push(`★EVADE★ ${def.stats.nameJp}はバリア攻撃を回避！`); return;
+      msgs.push(`★EVADE★ ${def.logName}はバリア攻撃を回避！`); return;
     }
     const d = calcBarrierDmg(att);
     const dmg = luckyReduce(def, d, msgs);
     def.currentHp = Math.max(0, def.currentHp - dmg);
-    msgs.push(`${att.stats.nameJp}のバリア攻撃：${d}ダメージ`);
+    msgs.push(`${att.logName}のバリア攻撃：${d}ダメージ`);
     showHit(def === p1);
   }
 
@@ -2475,50 +2598,50 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const r1 = calcAtkDmg(first, second);
       const d1 = luckyReduce(second, r1.dmg, msgs);
       second.currentHp = Math.max(0, second.currentHp - d1);
-      msgs.push(`${first.stats.nameJp}（先攻）のアタック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
+      msgs.push(`${first.logName}（先攻）のアタック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
       showHit(second === p1);
       if (second.currentHp > 0) {
         const r2 = calcAtkDmg(second, first);
         const d2 = luckyReduce(first, r2.dmg, msgs);
         first.currentHp = Math.max(0, first.currentHp - d2);
-        msgs.push(`${second.stats.nameJp}（後攻）のアタック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
+        msgs.push(`${second.logName}（後攻）のアタック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
         showHit(first === p1);
       } else {
-        msgs.push(`${second.stats.nameJp}は反撃できなかった...`);
+        msgs.push(`${second.logName}は反撃できなかった...`);
       }
       break;
     }
     case 'attack_barrier':
-      msgs.push(`${p1.stats.nameJp}のアタックがバリアを突き破る！`);
+      msgs.push(`${p1.logName}のアタックがバリアを突き破る！`);
       atkHit(p1, p2, 'アタック'); break;
     case 'attack_magic':
-      msgs.push(`${p2.stats.nameJp}のマジックがアタックを上回る！`);
+      msgs.push(`${p2.logName}のマジックがアタックを上回る！`);
       { const hit = magHit(p2, p2m, p1); if (hit && p2m !== 'normal') applyEffect(p1, p2m, msgs); } break;
     case 'attack_charge':
       processCharge(p2, p1, 'attack', null, msgs); break;
     // ── バリア
     case 'barrier_attack':
-      msgs.push(`${p2.stats.nameJp}のアタックがバリアを突き破る！`);
+      msgs.push(`${p2.logName}のアタックがバリアを突き破る！`);
       atkHit(p2, p1, 'アタック'); break;
     case 'barrier_barrier': {
       msgs.push('バリア vs バリア！なぜかダメージが発生する...');
       const [first, second] = getSpdFirst(p1, p2);
       const d1 = luckyReduce(second, calcBarrierDmg(first), msgs);
       second.currentHp = Math.max(0, second.currentHp - d1);
-      msgs.push(`${first.stats.nameJp}（先攻）のバリア攻撃：${d1}ダメージ`);
+      msgs.push(`${first.logName}（先攻）のバリア攻撃：${d1}ダメージ`);
       showHit(second === p1);
       if (second.currentHp > 0) {
         const d2 = luckyReduce(first, calcBarrierDmg(second), msgs);
         first.currentHp = Math.max(0, first.currentHp - d2);
-        msgs.push(`${second.stats.nameJp}（後攻）のバリア攻撃：${d2}ダメージ`);
+        msgs.push(`${second.logName}（後攻）のバリア攻撃：${d2}ダメージ`);
         showHit(first === p1);
       } else {
-        msgs.push(`${second.stats.nameJp}は反撃できなかった...`);
+        msgs.push(`${second.logName}は反撃できなかった...`);
       }
       break;
     }
     case 'barrier_magic': {
-      msgs.push(`${p1.stats.nameJp}のバリアがマジックを反射！`);
+      msgs.push(`${p1.logName}のバリアがマジックを反射！`);
       const r = calcMagDmg(p2, p1, p2m);
       const dmg = luckyReduce(p2, r.dmg, msgs);
       p2.currentHp = Math.max(0, p2.currentHp - dmg);
@@ -2536,10 +2659,10 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       processCharge(p2, p1, 'barrier', null, msgs); break;
     // ── マジック
     case 'magic_attack':
-      msgs.push(`${p1.stats.nameJp}のマジックがアタックを上回る！`);
+      msgs.push(`${p1.logName}のマジックがアタックを上回る！`);
       { const hit = magHit(p1, p1m, p2); if (hit && p1m !== 'normal') applyEffect(p2, p1m, msgs); } break;
     case 'magic_barrier': {
-      msgs.push(`${p2.stats.nameJp}のバリアがマジックを反射！`);
+      msgs.push(`${p2.logName}のバリアがマジックを反射！`);
       const r = calcMagDmg(p1, p2, p1m);
       const dmg = luckyReduce(p1, r.dmg, msgs);
       p1.currentHp = Math.max(0, p1.currentHp - dmg);
@@ -2561,18 +2684,18 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const r1 = calcMagDmg(first, second, fm);
       const d1 = luckyReduce(second, r1.dmg, msgs);
       second.currentHp = Math.max(0, second.currentHp - d1);
-      msgs.push(`${first.stats.nameJp}（先攻）のマジック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
+      msgs.push(`${first.logName}（先攻）のマジック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
       showHit(second === p1);
       if (fm !== 'normal') applyEffect(second, fm, msgs);
       if (second.currentHp > 0) {
         const r2 = calcMagDmg(second, first, sm);
         const d2 = luckyReduce(first, r2.dmg, msgs);
         first.currentHp = Math.max(0, first.currentHp - d2);
-        msgs.push(`${second.stats.nameJp}（後攻）のマジック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
+        msgs.push(`${second.logName}（後攻）のマジック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
         showHit(first === p1);
         if (sm !== 'normal') applyEffect(first, sm, msgs);
       } else {
-        msgs.push(`${second.stats.nameJp}は反撃できなかった...`);
+        msgs.push(`${second.logName}は反撃できなかった...`);
       }
       break;
     }
@@ -2587,8 +2710,8 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       processCharge(p1, p2, 'magic', p2m, msgs); break;
     case 'charge_charge':
       msgs.push('お互いチャージ！');
-      { const r1=p1.stats.hp*CHARGE_RECOVER; p1.currentHp=Math.min(p1.maxHp,p1.currentHp+r1); p1.chargeBonus=true; msgs.push(`${p1.stats.nameJp}：HP+${r1}`); }
-      { const r2=p2.stats.hp*CHARGE_RECOVER; p2.currentHp=Math.min(p2.maxHp,p2.currentHp+r2); p2.chargeBonus=true; msgs.push(`${p2.stats.nameJp}：HP+${r2}`); } break;
+      { const r1=p1.stats.hp*CHARGE_RECOVER; p1.currentHp=Math.min(p1.maxHp,p1.currentHp+r1); p1.chargeBonus=true; msgs.push(`${p1.logName}：HP+${r1}`); }
+      { const r2=p2.stats.hp*CHARGE_RECOVER; p2.currentHp=Math.min(p2.maxHp,p2.currentHp+r2); p2.chargeBonus=true; msgs.push(`${p2.logName}：HP+${r2}`); } break;
   }
 }
 
@@ -2682,51 +2805,51 @@ function resolveTurn() {
   const msgs = [`【TURN ${battle.turn}】 ${getActName(p1a,p1m)} vs ${getActName(p2a,p2m)}`];
 
   if (p1a === 'stunned') {
-    msgs.push(`${p1.stats.nameJp}はスタンで行動できない！`);
+    msgs.push(`${p1.logName}はスタンで行動できない！`);
     if (p2a === 'attack') {
       const r = calcAtkDmg(p2, p1);
       const dmg = luckyReduce(p1, r.dmg, msgs);
       p1.currentHp = Math.max(0, p1.currentHp - dmg);
-      msgs.push(`${p2.stats.nameJp}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      msgs.push(`${p2.logName}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(true);
     } else if (p2a === 'magic') {
       const r = calcMagDmg(p2, p1, p2m);
       const dmg = luckyReduce(p1, r.dmg, msgs);
       p1.currentHp = Math.max(0, p1.currentHp - dmg);
-      msgs.push(`${p2.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      msgs.push(`${p2.logName}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(true);
       if (p2m !== 'normal') applyEffect(p1, p2m, msgs);
     } else if (p2a === 'barrier') {
-      msgs.push(`${p2.stats.nameJp}はバリアを構えた`);
+      msgs.push(`${p2.logName}はバリアを構えた`);
     } else if (p2a === 'charge') {
       const rec = p2.stats.hp * CHARGE_RECOVER;
       p2.currentHp = Math.min(p2.maxHp, p2.currentHp + rec);
       p2.chargeBonus = true;
-      msgs.push(`${p2.stats.nameJp}はチャージ！HP+${rec}`);
+      msgs.push(`${p2.logName}はチャージ！HP+${rec}`);
     }
     p1.stunned = false;
   } else if (p2a === 'stunned') {
-    msgs.push(`${p2.stats.nameJp}はスタンで行動できない！`);
+    msgs.push(`${p2.logName}はスタンで行動できない！`);
     if (p1a === 'attack') {
       const r = calcAtkDmg(p1, p2);
       const dmg = luckyReduce(p2, r.dmg, msgs);
       p2.currentHp = Math.max(0, p2.currentHp - dmg);
-      msgs.push(`${p1.stats.nameJp}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      msgs.push(`${p1.logName}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(false);
     } else if (p1a === 'magic') {
       const r = calcMagDmg(p1, p2, p1m);
       const dmg = luckyReduce(p2, r.dmg, msgs);
       p2.currentHp = Math.max(0, p2.currentHp - dmg);
-      msgs.push(`${p1.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      msgs.push(`${p1.logName}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(false);
       if (p1m !== 'normal') applyEffect(p2, p1m, msgs);
     } else if (p1a === 'barrier') {
-      msgs.push(`${p1.stats.nameJp}はバリアを構えた`);
+      msgs.push(`${p1.logName}はバリアを構えた`);
     } else if (p1a === 'charge') {
       const rec = p1.stats.hp * CHARGE_RECOVER;
       p1.currentHp = Math.min(p1.maxHp, p1.currentHp + rec);
       p1.chargeBonus = true;
-      msgs.push(`${p1.stats.nameJp}はチャージ！HP+${rec}`);
+      msgs.push(`${p1.logName}はチャージ！HP+${rec}`);
     }
     p2.stunned = false;
   } else {
@@ -2745,6 +2868,17 @@ function finalizeTurn(msgs) {
   // スタン中でもchargeBonus は維持する（前ターンのチャージが無駄にならないよう）
   if (p1.selectedAction !== 'charge' && p1.selectedAction !== 'stunned') p1.chargeBonus = false;
   if (p2.selectedAction !== 'charge' && p2.selectedAction !== 'stunned') p2.chargeBonus = false;
+
+  // ユニーク使用後クールダウン管理
+  if (p1.selectedAction === 'magic' && p1.selectedMagicType === 'unique') p1.uniqueCooldown = true;
+  if (p2.selectedAction === 'magic' && p2.selectedMagicType === 'unique') p2.uniqueCooldown = true;
+  // アタック・バリア・ユニーク以外のマジック → クールダウン解除
+  const p1Resets = p1.selectedAction === 'attack' || p1.selectedAction === 'barrier' ||
+    (p1.selectedAction === 'magic' && p1.selectedMagicType !== 'unique');
+  const p2Resets = p2.selectedAction === 'attack' || p2.selectedAction === 'barrier' ||
+    (p2.selectedAction === 'magic' && p2.selectedMagicType !== 'unique');
+  if (p1Resets) p1.uniqueCooldown = false;
+  if (p2Resets) p2.uniqueCooldown = false;
 
   battle.turn++;
   // ログを蓄積（モーダル表示用）
@@ -2776,7 +2910,10 @@ function getAIAction(ai, opp) {
   let magicType = 'normal';
   if (action === 'magic') {
     const opts = getMagicOptions(ai);
-    magicType = opts[Math.floor(Math.random() * opts.length)].type;
+    // uniqueCooldown中はユニーク除外
+    const filtered = opts.filter(o => !(o.type === 'unique' && ai.uniqueCooldown));
+    const pool = filtered.length > 0 ? filtered : opts.filter(o => o.type !== 'unique');
+    magicType = pool[Math.floor(Math.random() * pool.length)].type;
   }
   return { action, magicType };
 }
@@ -2919,23 +3056,31 @@ function startBattle() {
     $('slash').classList.remove('on');
   }, T.VS_BADGE);
 
-  updateBattleLog(`${p1stats.nameJp} VS ${p2stats.nameJp}\nバトル開始！`);
+  updateBattleLog(`${battle.p1.logName} VS ${battle.p2.logName}\nバトル開始！`);
   // ヘルプをバトル開始時に自動表示（次回以降表示しないが未設定の場合）
   if (localStorage.getItem('liverbattle_skip_rule') !== '1') {
-    setTimeout(() => openRuleModal(), 300);
+    setTimeout(() => openRuleModal(), T.RULE_SHOW);
   }
   setTimeout(prepareTurn, T.BATTLE_START);
 }
 
 function renderBattleChars() {
   const p1=battle.p1, p2=battle.p2;
-  function setChar(imgEl, cvEl, char, flip) {
-    imgEl.onerror = () => { imgEl.style.display='none'; cvEl.style.display='block'; drawPlaceholder(cvEl, char, flip, true); };
-    if (char.bg) { imgEl.src=char.bg; imgEl.style.display='block'; cvEl.style.display='none'; }
-    else { imgEl.style.display='none'; cvEl.style.display='block'; drawPlaceholder(cvEl, char, flip, true); }
+  function setChar(imgEl, cvEl, char) {
+    if (char.isBoss) {
+      // 専用bg → 失敗したらシルエット
+      imgEl.onload  = () => { imgEl.style.display='block'; cvEl.style.display='none'; };
+      imgEl.onerror = () => { imgEl.style.display='none'; cvEl.style.display='block'; drawSilhouette(cvEl, char.baseBg, char.color); };
+      imgEl.src = char.bg || '';
+      if (!char.bg) { imgEl.style.display='none'; cvEl.style.display='block'; drawSilhouette(cvEl, char.baseBg, char.color); }
+    } else {
+      imgEl.onerror = () => { imgEl.style.display='none'; cvEl.style.display='block'; drawPlaceholder(cvEl, char, false, true); };
+      if (char.bg) { imgEl.src=char.bg; imgEl.style.display='block'; cvEl.style.display='none'; }
+      else { imgEl.style.display='none'; cvEl.style.display='block'; drawPlaceholder(cvEl, char, false, true); }
+    }
   }
-  setChar(document.getElementById('b-img-p1'), document.getElementById('b-canvas-p1'), p1.char, false);
-  setChar(document.getElementById('b-img-p2'), document.getElementById('b-canvas-p2'), p2.char, false);
+  setChar($('b-img-p1'), $('b-canvas-p1'), p1.char);
+  setChar($('b-img-p2'), $('b-canvas-p2'), p2.char);
 }
 
 /* ── ターン準備 ── */
@@ -2951,7 +3096,7 @@ function prepareTurn() {
     $('battle-confirm-row').style.pointerEvents = 'none';
     $('battle-confirm-row').style.opacity = '0.3';
     battle.phase = 'resolve';
-    updateBattleLog(`${p1.stats.nameJp}はスタンで行動できない！\n敵のターン...`);
+    updateBattleLog(`${p1.logName}はスタンで行動できない！\n敵のターン...`);
     showCutIn('⚡ STUN', '', '', '', 'p2', () => {
       setTimeout(() => {
         const ai = getAIAction(p2, p1);
@@ -2966,7 +3111,7 @@ function prepareTurn() {
 
   // p2がスタン：敵行動不能・プレイヤーは自由に行動
   if (p2.stunned) {
-    updateBattleLog(`${p2.stats.nameJp}はスタンで行動できない！\nコマンドを選択してください`);
+    updateBattleLog(`${p2.logName}はスタンで行動できない！\nコマンドを選択してください`);
     p2.selectedAction = 'stunned'; p2.selectedMagicType = null;
     // コマンド選択は通常通り。confirm後にresolveTurnでp2.selectedAction='stunned'を処理
   }
@@ -3033,6 +3178,9 @@ function selectAction(action) {
 
 function openMagicMenu() {
   if (battle.phase !== 'select') return;
+  // マジックメニューを開いた時点で他のselectを解除
+  ['btn-atk','btn-bar','btn-mag','btn-chg'].forEach(id => $(id).classList.remove('selected'));
+  $('btn-mag').classList.add('selected');
   const opts = getMagicOptions(battle.p1);
   const c = $('magic-options');
   c.innerHTML = '';

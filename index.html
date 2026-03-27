@@ -1547,20 +1547,15 @@ function buildCarousel() {
       drawIconPlaceholder(cvs, ch);
       inner.appendChild(cvs);
     } else if (ch.isBoss) {
-      // ボス：専用画像 or ベース画像をシルエット化
+      // ボス：専用顔画像があればそのまま表示、なければシルエット
       const cvs = document.createElement('canvas');
       cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
       inner.appendChild(cvs);
-      // 専用顔画像を試みる → 失敗したらベース画像でシルエット
       const testImg = new Image();
       testImg.onload = () => {
+        // 専用画像はそのまま表示（シルエット化しない）
         const ctx = cvs.getContext('2d');
         ctx.drawImage(testImg, 0, 0, 72, 72);
-        const d = ctx.getImageData(0, 0, 72, 72);
-        for (let i = 0; i < d.data.length; i += 4) {
-          if (d.data[i+3] > 10) { d.data[i]=10; d.data[i+1]=10; d.data[i+2]=20; }
-        }
-        ctx.putImageData(d, 0, 0);
       };
       testImg.onerror = () => drawSilhouette(cvs, ch.baseFace, ch.color);
       testImg.src = ch.face;

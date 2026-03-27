@@ -1,0 +1,3316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>LiverBattle v1.2</title>
+  <!-- PWA / アイコン設定 -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/x-icon" href="icons/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon_32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon_16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="LiverBattle">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --p1c: #38d9f5;
+  --p2c: #ff8c00;
+  --gold: #f0c040;
+  --bg: #07070e;
+  --gray: #888899;
+  --card-w: 72px;
+  --card-h: 72px;
+  --gap: 10px;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width:100%; height:100%;
+  background:#000;
+  overflow:hidden;
+  font-family:'Rajdhani','Noto Sans JP',sans-serif;
+  touch-action:none;
+}
+
+/* ── PAGE WRAPPER ── */
+#page {
+  width:100%;
+  max-width:430px;
+  height:100dvh;
+  margin:0 auto;
+  background:var(--bg);
+  position:relative;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+#bg-fx {
+  position:absolute; inset:0; z-index:0; pointer-events:none;
+}
+#bg-grid {
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.013) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.013) 1px, transparent 1px);
+  background-size:44px 44px;
+}
+#bg-glow {
+  position:absolute; inset:0;
+  background:radial-gradient(ellipse at 50% 40%, #38d9f508 0%, transparent 65%);
+  transition:background 0.6s ease;
+}
+
+/* ── HEADER ── */
+#header {
+  position:relative; z-index:10;
+  padding:14px 20px 14px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-shrink:0;
+  background:#000;
+  border-bottom:1px solid #1a1a2a;
+}
+
+.hdr-side { display:flex; flex-direction:column; gap:1px; }
+.hdr-side.right { align-items:flex-end; }
+
+.player-tag {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:9px; letter-spacing:4px; opacity:0.5;
+}
+.player-tag.p1 { color:var(--p1c); }
+.player-tag.p2 { color:var(--p2c); }
+
+.phase-lbl {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:20px; letter-spacing:4px; color:#fff;
+  opacity:0; transform:translateY(-4px);
+  transition:opacity 0.25s, transform 0.25s;
+}
+.phase-lbl.on { opacity:1; transform:translateY(0); }
+
+#hdr-tap-hint {
+  font-family:'Noto Sans JP',sans-serif;
+  font-size:9px; letter-spacing:1px;
+  color:#fff; opacity:0.6;
+  margin-top:4px;
+  font-weight:400;
+  text-align:center;
+  display:block;
+}
+
+.hdr-center {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:9px; letter-spacing:7px;
+  color:#fff; opacity:0.7;
+  padding-top:5px;
+  text-align:center;
+  display:flex; flex-direction:column; align-items:center;
+}
+
+/* ── CHARACTER DISPLAY ── */
+#char-display {
+  position:relative; z-index:5;
+  flex:1;
+  min-height:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  overflow:hidden;
+  margin-bottom:-60px;
+}
+
+/* Bottom fade */
+#char-display::after {
+  content:'';
+  position:absolute;
+  bottom:0; left:0; right:0;
+  height:30%;
+  background:linear-gradient(transparent, var(--bg));
+  z-index:3; pointer-events:none;
+}
+
+/* Color splash behind character */
+#char-splash {
+  position:absolute;
+  bottom:10%; left:50%;
+  transform:translateX(-50%);
+  width:80%; height:60%;
+  border-radius:50%;
+  filter:blur(60px);
+  opacity:0.18;
+  transition:background 0.5s ease, opacity 0.5s;
+  z-index:1;
+}
+
+/* Main char slot */
+.char-slot {
+  position:absolute;
+  bottom:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  transition:all 0.55s cubic-bezier(0.16,1,0.3,1);
+  z-index:2;
+}
+
+#slot-main {
+  width:100%;
+  height:100%;
+}
+
+/* Canvas/img inside slot */
+.char-slot canvas {
+  width:100%; height:100%;
+  object-fit:contain;
+  object-position:bottom center;
+  display:block;
+}
+/* bg画像はcover（縦幅基準、横トリミング） */
+.char-slot img {
+  display:none;
+  width:100%; height:100%;
+  object-fit:cover;
+  object-position:center top;
+}
+
+
+/* Name tag */
+#char-name {
+  position:absolute;
+  bottom:80px; left:0; right:0;
+  z-index:20;
+  text-align:center;
+  pointer-events:none;
+  opacity:0;
+  transform:translateY(8px);
+  transition:opacity 0.35s 0.1s, transform 0.35s 0.1s;
+}
+#char-name.show { opacity:1; transform:translateY(0); }
+
+
+#char-name-jp {
+  font-family:'Noto Sans JP',sans-serif;
+  font-weight:900;
+  font-size:28px; letter-spacing:4px;
+  color:#fff;
+  text-shadow:0 2px 20px rgba(0,0,0,0.95), 0 0 40px rgba(0,0,0,0.8);
+  line-height:1;
+  white-space:nowrap;
+}
+#char-name-en { display:none; }
+
+/* ── CAROUSEL ── */
+#carousel-wrap {
+  position:relative; z-index:15;
+  padding:0 0 2px;
+  flex-shrink:0;
+}
+
+/* Track overflow mask */
+#carousel-mask {
+  overflow:hidden;
+  position:relative;
+}
+/* Left/right fade edges */
+#carousel-mask::before,
+#carousel-mask::after {
+  content:''; position:absolute; top:0; bottom:0; width:56px; z-index:2; pointer-events:none;
+}
+#carousel-mask::before { left:0;  background:linear-gradient(90deg,  var(--bg) 0%, transparent 100%); }
+#carousel-mask::after  { right:0; background:linear-gradient(270deg, var(--bg) 0%, transparent 100%); }
+
+#carousel-track {
+  display:flex;
+  gap:var(--gap);
+  padding:12px 0 16px;
+  will-change:transform;
+  transition:transform 0.38s cubic-bezier(0.25,1,0.5,1);
+}
+#carousel-track.dragging {
+  transition:none;
+}
+
+/* Individual cards */
+.c-card {
+  width:var(--card-w);
+  height:var(--card-h);
+  flex-shrink:0;
+  position:relative;
+  transition:transform 0.3s cubic-bezier(0.25,1,0.5,1), opacity 0.3s;
+  opacity:0.45;
+  transform:scale(0.88);
+}
+.c-card.active {
+  opacity:1;
+  transform:scale(1.08);
+}
+.c-card.locked-p1,
+.c-card.locked-p2 { opacity:0.75; }
+
+.c-inner {
+  position:absolute; inset:0;
+  clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);
+  background:#0f0f1c;
+  overflow:hidden;
+  transition:background 0.15s;
+}
+.c-inner::after {
+  content:''; position:absolute; inset:0;
+  clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);
+  box-shadow:inset 0 0 0 1px #2a2a40;
+  pointer-events:none; z-index:2;
+}
+.c-card.active .c-inner::after {
+  box-shadow:inset 0 0 0 2px var(--p1c);
+}
+.c-card.active.p2-active .c-inner::after {
+  box-shadow:inset 0 0 0 2px var(--p2c);
+}
+
+/* Pulse on active */
+.c-pulse {
+  position:absolute; inset:0;
+  clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);
+  pointer-events:none; z-index:3;
+  opacity:0;
+}
+.c-card.active .c-pulse {
+  background:var(--p1c);
+  animation:cpulse 1.1s ease-in-out infinite alternate;
+}
+.c-card.active.p2-active .c-pulse {
+  background:var(--p2c);
+}
+@keyframes cpulse { from{opacity:0.04} to{opacity:0.14} }
+
+.c-canvas { width:100%; height:100%; display:block; }
+.c-img { width:100%; height:100%; object-fit:cover; object-position:center top; display:block; }
+
+.c-lbl { display:none; }
+
+/* Lock badges */
+.c-badge {
+  position:absolute; top:3px; z-index:10;
+  width:14px; height:14px; border-radius:50%;
+  display:none; align-items:center; justify-content:center;
+  font-size:7px; font-weight:900; color:#000;
+}
+.c-badge.p1 { left:9px; background:var(--p1c); }
+.c-badge.p2 { right:9px; background:var(--p2c); }
+
+/* ── DECIDE BUTTON ── */
+#decide-wrap {
+  position:relative; z-index:10;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:4px 20px 20px;
+  flex-shrink:0;
+}
+
+.nav-btn {
+  width:44px; height:44px;
+  background:#111822;
+  border:1px solid #2a2a40;
+  border-radius:4px;
+  color:#fff;
+  font-size:20px; line-height:1;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+  transition:background 0.15s, transform 0.1s, border-color 0.25s;
+  user-select:none; -webkit-user-select:none;
+}
+.nav-btn:active { transform:scale(0.9); }
+#nav-prev.p1-nav { border-color:var(--p1c); color:var(--p1c); }
+#nav-next.p1-nav { border-color:var(--p1c); color:var(--p1c); }
+#nav-prev.p2-nav { border-color:var(--p2c); color:var(--p2c); }
+#nav-next.p2-nav { border-color:var(--p2c); color:var(--p2c); }
+
+#decide-btn {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:18px; letter-spacing:6px;
+  color:#000;
+  background:var(--p1c);
+  border:none; outline:none; cursor:pointer;
+  flex:1; max-width:220px;
+  padding:13px 0;
+  clip-path:polygon(14px 0%,100% 0%,calc(100% - 14px) 100%,0% 100%);
+  position:relative;
+  transition:background 0.25s, transform 0.1s, filter 0.15s;
+  user-select:none;
+  -webkit-user-select:none;
+}
+#decide-btn::before {
+  content:'';
+  position:absolute; inset:0;
+  clip-path:polygon(14px 0%,100% 0%,calc(100% - 14px) 100%,0% 100%);
+  background:linear-gradient(180deg,rgba(255,255,255,0.28) 0%,transparent 55%);
+  pointer-events:none;
+}
+#decide-btn:active { transform:scaleY(0.94); filter:brightness(0.85); }
+#decide-btn.p2 { background:var(--p2c); }
+#decide-btn:disabled { background:#333; color:#666; pointer-events:none; }
+
+/* ── STATUS MODAL ── */
+#status-modal {
+  position:absolute; inset:0; z-index:50;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.92);
+  opacity:0; pointer-events:none;
+  transition:opacity 0.25s;
+  overflow-y:auto;
+  padding:16px 0;
+}
+#status-modal.show {
+  opacity:1; pointer-events:all;
+}
+#status-modal-inner {
+  position:relative;
+  width:100%;
+  display:flex; flex-direction:column; align-items:center;
+  transform:translateY(12px);
+  transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  overflow:hidden;
+}
+#status-modal.show #status-modal-inner {
+  transform:translateY(0);
+}
+#status-modal-img {
+  width:100%;
+  height:auto;
+  display:block;
+  transform-origin:0 0;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;
+}
+#status-modal-img.grabbing { cursor:grabbing; }
+#status-modal-close {
+  width:100%;
+  padding:12px 0;
+  background:#111;
+  border:none;
+  border-bottom:1px solid #2a2a40;
+  color:var(--gray); font-size:11px;
+  font-family:'Bebas Neue',sans-serif;
+  letter-spacing:4px;
+  cursor:pointer;
+  transition:background 0.15s, color 0.15s;
+  flex-shrink:0;
+}
+#status-modal-close:hover { background:#1a1a2a; color:#fff; }
+#status-modal-no-card {
+  color:var(--gray); font-size:11px; letter-spacing:3px;
+  padding:40px 0; display:none;
+}
+
+/* ── PRELOAD ── */
+#preload-screen {
+  position:absolute; inset:0; z-index:1000;
+  background:#000;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:20px;
+  transition:opacity 0.6s ease;
+}
+#preload-screen.fade-out {
+  opacity:0; pointer-events:none;
+}
+
+#preload-title {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:13px; letter-spacing:8px;
+  color:#fff; opacity:0.4;
+}
+
+#preload-bar-wrap {
+  width:70%;
+  height:2px;
+  background:#1a1a2a;
+  position:relative;
+  overflow:hidden;
+}
+#preload-bar {
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg, var(--p1c), var(--gold));
+  transition:width 0.2s ease;
+  box-shadow:0 0 8px var(--p1c);
+}
+
+#preload-pct {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:11px; letter-spacing:4px;
+  color:var(--gray); opacity:0.6;
+}
+
+/* ── OVERLAYS ── */
+#flash    { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:500; }
+#blackout { position:absolute; inset:0; background:#000; opacity:0; pointer-events:none; z-index:499; transition:opacity 1.3s ease-in; }
+#blackout.on { opacity:1; }
+#slash {
+  position:absolute; inset:0; z-index:400; pointer-events:none;
+  opacity:0; overflow:hidden;
+}
+#slash::before {
+  content:''; position:absolute; top:-10%; left:47%; width:3px; height:120%;
+  background:linear-gradient(180deg,transparent,#fff,var(--gold),#fff,transparent);
+  transform:rotate(45deg); filter:blur(1px);
+  box-shadow:0 0 20px 6px rgba(255,190,0,0.4);
+}
+#slash.on { animation:slanim 0.5s forwards; }
+@keyframes slanim { 0%{opacity:0} 25%{opacity:1} 100%{opacity:0} }
+
+/* ── VS SPLIT SCREEN ── */
+#vs-screen {
+  position:absolute; inset:0; z-index:300;
+  display:flex; flex-direction:column;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 0.35s;
+}
+#vs-screen.show { opacity:1; }
+
+.vs-half {
+  flex:1;
+  position:relative;
+  overflow:hidden;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+}
+.vs-half.top {
+  background:linear-gradient(160deg,#200d04 0%,#100806 100%);
+}
+.vs-half.bot {
+  background:linear-gradient(340deg,#0d1020 0%,#080810 100%);
+}
+.vs-half.top::after {
+  content:''; position:absolute; inset:0;
+  background:radial-gradient(ellipse at 50% 80%, #ff8c0010 0%, transparent 70%);
+  pointer-events:none;
+}
+.vs-half.bot::after {
+  content:''; position:absolute; inset:0;
+  background:radial-gradient(ellipse at 50% 20%, #38d9f510 0%, transparent 70%);
+  pointer-events:none;
+}
+
+.vs-char-wrap {
+  position:absolute;
+  inset:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:transform 0.65s cubic-bezier(0.16,1,0.3,1);
+  overflow:hidden;
+}
+#vs-wrap-p1 { transform:translateX(-110%); }
+#vs-wrap-p2 { transform:translateX(110%); }
+#vs-wrap-p1.in { transform:translateX(0); }
+#vs-wrap-p2.in { transform:translateX(0); }
+
+/* ボス登場：ズームアウト+フェードで出現 */
+#vs-wrap-p1.boss-in,
+#vs-wrap-p2.boss-in {
+  transform:translateX(0);
+  animation: boss-appear 0.7s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+@keyframes boss-appear {
+  0%   { opacity:0; transform:scale(1.1); filter:blur(12px); }
+  60%  { opacity:0.9; filter:blur(2px); }
+  100% { opacity:1; transform:scale(1); filter:blur(0); }
+}
+
+/* VS画像 — 縦幅に合わせてスケール、横からスライドイン */
+.vs-char-wrap canvas {
+  width:100%; height:100%;
+  object-fit:contain; object-position:center center;
+  display:block;
+}
+.vs-char-wrap img {
+  display:none;
+  width:100%; height:100%;
+  object-fit:cover;
+  object-position:center center;
+}
+
+/* Name tags */
+.vs-name {
+  position:absolute;
+  font-family:'Noto Sans JP',sans-serif;
+  font-weight:900; font-size:16px; letter-spacing:2px;
+  color:#fff; text-shadow:0 2px 12px rgba(0,0,0,0.9);
+  z-index:4; opacity:0;
+  transition:opacity 0.35s;
+  white-space:nowrap;
+}
+.vs-half.top .vs-name { bottom:12px; right:14px; text-align:right; color:var(--p2c); }
+.vs-half.bot .vs-name { top:12px; left:14px; color:var(--p1c); }
+.vs-name.show { opacity:1; }
+
+/* Diagonal divider between halves */
+#vs-mid-line {
+  position:absolute;
+  top:50%; left:0;
+  width:100%; height:2px;
+  background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 20%, var(--gold) 50%, rgba(255,255,255,0.25) 80%, transparent 100%);
+  transform:translateY(-50%);
+  z-index:5;
+  opacity:0;
+  box-shadow:0 0 12px 2px rgba(240,192,64,0.4);
+  transition:opacity 0.3s 0.5s;
+  pointer-events:none;
+}
+#vs-screen.show #vs-mid-line { opacity:1; }
+
+/* VS badge */
+#vs-badge {
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%) scale(0.4);
+  z-index:10;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:72px; letter-spacing:-2px;
+  color:var(--gold);
+  text-shadow:4px 4px 0 #7a5500, 0 0 40px #f0c04088;
+  opacity:0;
+  transition:opacity 0.25s, transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+}
+#vs-badge.show {
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+  animation:vspulse 0.55s ease-in-out infinite alternate;
+}
+@keyframes vspulse {
+  from{transform:translate(-50%,-50%) scale(1)}
+  to  {transform:translate(-50%,-50%) scale(1.1)}
+}
+
+canvas#sparks { position:absolute; inset:0; z-index:401; pointer-events:none; }
+
+/* scanlines */
+body::after {
+  content:''; position:fixed; inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.025) 3px,rgba(0,0,0,0.025) 4px);
+  pointer-events:none; z-index:600;
+}
+
+/* ═══════════════════════════════════════════
+   BATTLE SCREEN
+═══════════════════════════════════════════ */
+#battle-screen {
+  position:absolute; inset:0; z-index:200;
+  display:flex; flex-direction:column;
+  background:var(--bg);
+  opacity:0; pointer-events:none;
+  transition:opacity 0.4s;
+}
+#battle-screen.show { opacity:1; pointer-events:all; }
+
+/* ── Enemy HUD (top) ── */
+#battle-hud-enemy {
+  flex-shrink:0;
+  padding:5px 12px 5px;
+  background:#000;
+  border-bottom:1px solid #ff8c0033;
+}
+/* ── Player HUD (bottom of field) ── */
+#battle-hud-player {
+  flex-shrink:0;
+  padding:5px 12px 5px;
+  background:#000;
+  border-top:1px solid #38d9f533;
+}
+.b-hud-top {
+  display:flex; align-items:baseline; gap:6px; margin-bottom:3px;
+}
+.b-name-jp {
+  font-family:'Noto Sans JP',sans-serif;
+  font-size:12px; font-weight:900; letter-spacing:2px; color:#fff;
+}
+.b-name-job {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:12px; letter-spacing:3px; color:var(--p2c);
+}
+#battle-hud-player .b-name-job { color:var(--p1c); }
+.b-action-reveal {
+  font-family:'Bebas Neue',sans-serif; font-size:10px; letter-spacing:2px;
+  color:var(--p2c); margin-left:auto;
+}
+.b-hp-row { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.b-hp-bar-wrap {
+  flex:1; height:4px; background:#1a1a2a; border-radius:2px; overflow:hidden;
+}
+.b-hp-bar { height:100%; border-radius:2px; transition:width 0.4s ease; }
+#enemy-hp-bar  { background:var(--p2c); box-shadow:0 0 6px var(--p2c)88; }
+#player-hp-bar { background:var(--p1c); box-shadow:0 0 6px var(--p1c)88; }
+.b-hp-text {
+  font-family:'Rajdhani',sans-serif;
+  font-size:10px; color:var(--gray); white-space:nowrap; min-width:58px; text-align:right;
+}
+.b-hud-bottom { display:flex; align-items:center; gap:6px; margin-top:3px; }
+.b-hud-bottom:empty { display:none; }
+.b-status-row { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+.b-status-badge {
+  font-family:'Bebas Neue',sans-serif; font-size:8px; letter-spacing:1px;
+  padding:1px 5px; border-radius:2px;
+}
+.b-status-badge.stun   { background:#d63030; color:#fff; }
+.b-status-badge.debuff { background:#7b2fd6; color:#fff; }
+.b-status-badge.charge { background:var(--gold); color:#000; }
+
+/* ── Battle field (middle) ── */
+#battle-field {
+  flex:1; min-height:0;
+  display:flex; align-items:flex-end; justify-content:space-between;
+  position:relative; overflow:hidden;
+}
+#battle-field::before {
+  content:''; position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.008) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.008) 1px, transparent 1px);
+  background-size:44px 44px; pointer-events:none;
+}
+.b-char-wrap {
+  position:relative; width:47%; height:100%;
+  display:flex; align-items:flex-end; justify-content:center; overflow:hidden;
+}
+.b-char-wrap::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:20%; pointer-events:none;
+}
+.b-char-wrap.p1::after { background:linear-gradient(transparent, #38d9f50a); }
+.b-char-wrap.p2::after { background:linear-gradient(transparent, #ff8c000a); }
+.b-char-wrap canvas, .b-char-wrap img {
+  width:100%; height:100%; object-fit:cover; object-position:center top; display:block;
+}
+.b-char-wrap img { display:none; }
+
+#b-center {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  display:flex; flex-direction:column; align-items:center; gap:4px; z-index:5;
+}
+.b-turn-num {
+  font-family:'Bebas Neue',sans-serif; font-size:10px; letter-spacing:4px;
+  color:var(--gold); opacity:0.7;
+}
+.b-center-vs {
+  font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:2px;
+  color:rgba(255,255,255,0.06);
+}
+/* Hit flash */
+.b-char-wrap.hit { animation:b-hit 0.35s ease; }
+@keyframes b-hit {
+  0%  { filter:brightness(3) saturate(0); transform:translateX(0); }
+  20% { transform:translateX(-10px); }
+  40% { transform:translateX(8px); }
+  60% { transform:translateX(-6px); filter:brightness(1.5) saturate(0.5); }
+  80% { transform:translateX(4px); }
+  100%{ filter:none; transform:translateX(0); }
+}
+
+/* Evade flash */
+.b-char-wrap.evade { animation:b-evade 0.5s ease; }
+@keyframes b-evade {
+  0%  { filter:none; transform:translateX(0); }
+  20% { filter:brightness(2) hue-rotate(180deg); transform:translateX(8px); }
+  40% { transform:translateX(-8px); }
+  60% { transform:translateX(6px); }
+  80% { transform:translateX(-4px); }
+  100%{ filter:none; transform:translateX(0); }
+}
+
+/* Evade popup */
+#evade-popup {
+  position:absolute; z-index:15;
+  font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:4px;
+  color:#38d9f5; text-shadow:0 0 20px #38d9f5;
+  pointer-events:none;
+  opacity:0;
+}
+#evade-popup.show {
+  animation:evade-pop 0.7s ease forwards;
+}
+@keyframes evade-pop {
+  0%  { opacity:0; transform:translateY(0) scale(0.7); }
+  30% { opacity:1; transform:translateY(-16px) scale(1.1); }
+  70% { opacity:1; transform:translateY(-24px) scale(1); }
+  100%{ opacity:0; transform:translateY(-36px) scale(0.9); }
+}
+
+/* ── Battle log ── */
+#battle-log-wrap {
+  flex-shrink:0;
+  display:flex; align-items:stretch;
+  background:#04040a;
+  border-top:1px solid #1a1a2a;
+  border-bottom:1px solid #1a1a2a;
+}
+#battle-log {
+  flex:1;
+  height:52px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column-reverse;
+  padding:4px 8px 4px 14px;
+}
+#battle-log::-webkit-scrollbar { width:3px; }
+#battle-log::-webkit-scrollbar-track { background:transparent; }
+#battle-log::-webkit-scrollbar-thumb { background:#2a2a40; border-radius:2px; }
+#battle-log-list {
+  display:flex; flex-direction:column; gap:1px;
+}
+.b-log-entry {
+  font-family:'Noto Sans JP',sans-serif;
+  font-size:10px; font-weight:700; color:#bbb; line-height:1.5; letter-spacing:0.5px;
+  white-space:pre-line; flex-shrink:0;
+}
+.b-log-entry.old { color:#555; }
+.b-log-entry.evade { color:#38d9f5; }
+.b-log-entry.crit  { color:var(--gold); }
+#battle-log-nav {
+  display:flex; flex-direction:column;
+  border-left:1px solid #1a1a2a;
+  flex-shrink:0;
+}
+.log-nav-btn {
+  flex:1; width:28px;
+  background:transparent; border:none; cursor:pointer;
+  color:#444; font-size:10px; line-height:1;
+  transition:color 0.12s, background 0.12s;
+  user-select:none;
+}
+.log-nav-btn:hover { color:#aaa; background:#0a0a14; }
+.log-nav-btn:active { color:#fff; }
+
+/* ── Command panel ── */
+#battle-commands {
+  flex-shrink:0; background:#000;
+  padding:8px 12px 14px;
+  border-top:1px solid #1a1a2a;
+}
+#battle-action-btns {
+  display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; margin-bottom:7px;
+}
+.b-cmd-btn {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  padding:8px 4px;
+  background:#0f0f1c; border:1px solid #2a2a40; border-radius:4px;
+  color:#fff; cursor:pointer;
+  clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+  transition:background 0.12s, border-color 0.12s, opacity 0.15s, transform 0.08s;
+  user-select:none; -webkit-user-select:none;
+}
+.b-cmd-btn:active { transform:scale(0.91); }
+.b-cmd-btn.selected { background:#102030; border-color:var(--p1c); }
+.b-cmd-btn.forbidden { opacity:0.22; pointer-events:none; }
+.b-cmd-btn:disabled { opacity:0.25; pointer-events:none; }
+.b-cmd-icon { font-size:18px; line-height:1; }
+.b-cmd-label {
+  font-family:'Noto Sans JP',sans-serif;
+  font-size:8px; font-weight:700; letter-spacing:0.5px; color:#aaa;
+}
+
+/* Magic menu */
+#magic-menu { margin-bottom:7px; }
+#magic-options { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:6px; }
+.b-magic-btn {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:7px 6px; gap:2px;
+  background:#0f0f1c; border:1px solid #2a2a40; border-radius:3px;
+  color:#fff; cursor:pointer;
+  transition:background 0.12s, border-color 0.12s, transform 0.08s;
+  user-select:none;
+}
+.b-magic-btn:active { transform:scale(0.95); }
+.b-magic-btn.normal  { border-color:#38d9f555; }
+.b-magic-btn.stun    { border-color:#d6303055; }
+.b-magic-btn.debuff  { border-color:#7b2fd655; }
+.b-magic-btn.unique  { border-color:var(--gold)77; }
+.b-magic-btn.unique.disabled,
+.b-magic-btn.unique.charging { border-color:#333; opacity:0.4; cursor:not-allowed; }
+.b-mag-name { font-family:'Noto Sans JP',sans-serif; font-size:10px; font-weight:900; letter-spacing:1px; }
+.b-mag-desc { font-family:'Noto Sans JP',sans-serif; font-size:8px; color:var(--gray); letter-spacing:0.5px; }
+.b-back-btn {
+  width:100%; padding:5px;
+  background:#0a0a14; border:1px solid #2a2a40; border-radius:3px;
+  color:var(--gray); font-family:'Bebas Neue',sans-serif; font-size:11px; letter-spacing:3px;
+  cursor:pointer; transition:background 0.12s, color 0.12s;
+}
+.b-back-btn:hover { background:#1a1a2a; color:#fff; }
+
+/* Confirm row */
+#battle-confirm-row { display:flex; gap:8px; align-items:center; }
+#selected-action-display {
+  flex:1;
+  font-family:'Noto Sans JP',sans-serif; font-size:9px; font-weight:700;
+  letter-spacing:0.5px; color:var(--gray);
+  padding:0 4px; line-height:1.5;
+}
+#selected-action-display.has-action { color:var(--p1c); }
+#btn-confirm-turn {
+  font-family:'Bebas Neue',sans-serif; font-size:15px; letter-spacing:4px;
+  color:#000; background:var(--p1c); border:none; cursor:pointer;
+  padding:11px 20px;
+  clip-path:polygon(10px 0%,100% 0%,calc(100% - 10px) 100%,0% 100%);
+  transition:background 0.12s, transform 0.08s, filter 0.12s;
+  user-select:none; -webkit-user-select:none;
+}
+#btn-confirm-turn:disabled { background:#333; color:#555; pointer-events:none; }
+#btn-confirm-turn:active { transform:scaleY(0.93); filter:brightness(0.82); }
+
+/* ステータスインライン */
+.b-hud-stats {
+  font-family:'Bebas Neue',sans-serif; font-size:10px; letter-spacing:1px;
+  margin-left:6px; flex:1;
+  display:flex; flex-wrap:wrap; gap:0 8px; align-items:baseline;
+}
+.stat-chip { display:inline; }
+.stat-chip .si { color:#666; font-weight:700; }
+.stat-chip .sv { color:#fff; font-weight:900; font-size:12px; margin-left:2px; }
+.stat-chip.debuffed .sv { color:#c060f0; }
+
+/* 行動可否アイコン行 */
+.b-action-icons { display:flex; gap:3px; align-items:center; }
+.b-act-icon { font-size:13px; line-height:1; transition:opacity 0.2s, filter 0.2s; }
+.b-act-icon.blocked { opacity:0.18; filter:grayscale(1); }
+
+/* ？ボタン */
+#btn-rule-help {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:1px;
+  color:var(--gray); background:#0f0f1c; border:1px solid #2a2a40;
+  border-radius:3px; cursor:pointer; padding:9px 10px; flex-shrink:0;
+  transition:color 0.12s, border-color 0.12s;
+}
+#btn-rule-help:hover { color:#fff; border-color:#555; }
+
+/* 中止ボタン */
+#btn-battle-abort {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:1px;
+  color:#d63030; background:#0f0f1c; border:1px solid #d6303044;
+  border-radius:3px; cursor:pointer; padding:9px 10px; flex-shrink:0;
+  transition:color 0.12s, border-color 0.12s, background 0.12s;
+}
+#btn-battle-abort:hover { color:#ff6060; border-color:#d63030; background:#1a0808; }
+
+/* 中止確認モーダル */
+#abort-modal {
+  position:absolute; inset:0; z-index:30;
+  background:rgba(0,0,0,0.88);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.2s;
+}
+#abort-modal.show { opacity:1; pointer-events:all; }
+#abort-modal-inner {
+  background:#0d0d18; border:1px solid #d6303066; border-radius:6px;
+  padding:24px 28px 18px; display:flex; flex-direction:column; align-items:center; gap:18px;
+  min-width:220px;
+}
+.abort-title {
+  font-family:'Noto Sans JP',sans-serif; font-size:13px; font-weight:900;
+  letter-spacing:1px; color:#fff; text-align:center;
+}
+.abort-btns { display:flex; gap:10px; width:100%; }
+.abort-yes {
+  flex:1; padding:11px 0;
+  font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:4px;
+  color:#fff; background:#d63030; border:none; border-radius:4px; cursor:pointer;
+  transition:filter 0.12s, transform 0.08s;
+}
+.abort-yes:active { transform:scale(0.95); filter:brightness(0.85); }
+.abort-no {
+  flex:1; padding:11px 0;
+  font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:4px;
+  color:var(--gray); background:#0f0f1c; border:1px solid #2a2a40; border-radius:4px; cursor:pointer;
+  transition:color 0.12s, border-color 0.12s;
+}
+.abort-no:hover { color:#fff; border-color:#555; }
+
+/* ルールモーダル */
+#rule-modal {
+  position:absolute; inset:0; z-index:25;
+  background:rgba(0,0,0,0.92);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.25s;
+  overflow-y:auto; padding:16px;
+}
+#rule-modal.show { opacity:1; pointer-events:all; }
+#rule-modal-inner {
+  width:100%; max-width:360px;
+  background:#08080f; border:1px solid #2a2a40; border-radius:6px;
+  padding:18px 16px 12px; display:flex; flex-direction:column; gap:10px;
+}
+.rule-title {
+  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:6px;
+  color:var(--gold); text-align:center; margin-bottom:4px;
+}
+.rule-section { display:flex; flex-direction:column; gap:4px; }
+.rule-sec-title {
+  font-family:'Bebas Neue',sans-serif; font-size:11px; letter-spacing:3px;
+  color:var(--p1c); border-bottom:1px solid #1a1a2a; padding-bottom:2px;
+}
+.rule-row { display:flex; align-items:center; gap:4px; }
+.rule-icon { font-size:14px; }
+.rule-beats { font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--gold); margin:0 2px; }
+.rule-desc { font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#888; margin-left:4px; }
+.rule-text { font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#888; line-height:1.7; }
+.rule-row-sm { font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#666; line-height:1.6; }
+.rule-skip-row {
+  padding:6px 0 2px;
+  border-top:1px solid #1a1a2a;
+}
+.rule-skip-label {
+  display:flex; align-items:center; gap:8px; cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif; font-size:10px; color:#666;
+}
+.rule-skip-label input { accent-color:var(--p1c); width:14px; height:14px; cursor:pointer; }
+.rule-close-btn {
+  align-self:stretch; margin-top:6px; padding:10px;
+  background:#111; border:none; border-top:1px solid #2a2a40;
+  color:var(--gray); font-family:'Bebas Neue',sans-serif; font-size:13px; letter-spacing:4px;
+  cursor:pointer; transition:background 0.12s, color 0.12s;
+  border-radius:0 0 6px 6px;
+}
+.rule-close-btn:hover { background:#1a1a2a; color:#fff; }
+
+
+/* バトルログモーダル */
+#log-modal {
+  position:absolute; inset:0; z-index:30;
+  background:rgba(0,0,0,0.92);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.25s;
+  padding:16px;
+}
+#log-modal.show { opacity:1; pointer-events:all; }
+#log-modal-inner {
+  width:100%; max-width:360px; max-height:80vh;
+  background:#08080f; border:1px solid #2a2a40; border-radius:6px;
+  display:flex; flex-direction:column;
+}
+#log-modal-title {
+  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:6px;
+  color:var(--gold); text-align:center;
+  padding:14px 16px 10px; border-bottom:1px solid #1a1a2a; flex-shrink:0;
+}
+#log-modal-body {
+  flex:1; overflow-y:auto; padding:10px 14px;
+  display:flex; flex-direction:column; gap:6px;
+  min-height:0;
+}
+#log-modal-body::-webkit-scrollbar { width:3px; }
+#log-modal-body::-webkit-scrollbar-track { background:transparent; }
+#log-modal-body::-webkit-scrollbar-thumb { background:#2a2a40; border-radius:2px; }
+.log-turn-block { display:flex; flex-direction:column; gap:2px; }
+.log-turn-header {
+  font-family:'Bebas Neue',sans-serif; font-size:10px; letter-spacing:3px;
+  color:var(--p1c); border-bottom:1px solid #1a1a2a; padding-bottom:2px; margin-top:4px;
+}
+.log-turn-line {
+  font-family:'Noto Sans JP',sans-serif; font-size:10px; font-weight:700;
+  color:#888; line-height:1.6; white-space:pre-line;
+}
+.log-turn-line.evade { color:#38d9f5; }
+.log-turn-line.crit  { color:var(--gold); }
+
+/* ── Cut-in overlay ── */
+#cutin-overlay {
+  position:absolute; inset:0; z-index:18;
+  pointer-events:none;
+  display:flex; flex-direction:column; justify-content:center; gap:10px;
+  padding:0;
+}
+.cutin-band {
+  position:relative;
+  height:56px;
+  display:flex; align-items:center;
+  overflow:hidden;
+  transition:transform 0.38s cubic-bezier(0.16,1,0.3,1);
+}
+#cutin-band-p1 {
+  background:linear-gradient(90deg, var(--p1c) 0%, #1a3a4a 60%, transparent 100%);
+  transform:translateX(-110%);
+  padding-left:16px; padding-right:40px;
+  clip-path:polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
+}
+#cutin-band-p2 {
+  background:linear-gradient(270deg, var(--p2c) 0%, #4a2a00 60%, transparent 100%);
+  transform:translateX(110%);
+  padding-right:16px; padding-left:40px;
+  justify-content:flex-end;
+  clip-path:polygon(16px 0, 100% 0, 100% 100%, 16px 100%, 0 50%);
+}
+.cutin-action-name {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:22px; letter-spacing:3px; color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,0.8);
+  line-height:1;
+}
+.cutin-sub {
+  font-family:'Noto Sans JP',sans-serif;
+  font-size:9px; font-weight:700; color:rgba(255,255,255,0.7);
+  letter-spacing:1px; margin-left:6px;
+}
+/* Win状態：全幅を超えて押し切る */
+.cutin-band.win { transition:transform 0.55s cubic-bezier(0.16,1,0.3,1); }
+
+/* Result overlay */
+#battle-result {
+  position:absolute; inset:0; z-index:20;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  background:#000;
+  opacity:0; pointer-events:none; transition:opacity 0.5s;
+  overflow:hidden;
+}
+#battle-result.show { opacity:1; pointer-events:all; }
+#battle-result-bg {
+  position:absolute; inset:0;
+  background-size:cover; background-position:center top;
+  opacity:0; transition:opacity 0.8s ease;
+  z-index:0;
+}
+#battle-result-bg.show { opacity:0.35; }
+#battle-result > *:not(#battle-result-bg) { position:relative; z-index:1; }
+#battle-result-title {
+  font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:8px;
+  color:var(--gold); text-shadow:0 0 40px var(--gold)88;
+}
+#battle-result-sub {
+  font-family:'Noto Sans JP',sans-serif; font-size:14px; font-weight:900;
+  letter-spacing:3px; color:#fff; opacity:0.8;
+}
+#battle-result-log {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:5px;
+  color:#000; background:var(--gray); border:none; cursor:pointer;
+  padding:12px 28px;
+  clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);
+  transition:filter 0.12s, transform 0.08s;
+}
+#battle-result-log:active { transform:scale(0.94); }
+#battle-result-back {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:5px;
+  color:#000; background:var(--gold); border:none; cursor:pointer;
+  padding:12px 28px;
+  clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);
+  margin-top:10px;
+  transition:filter 0.12s, transform 0.08s;
+}
+#battle-result-back:active { transform:scale(0.94); }
+</style>
+</head>
+<body>
+<div id="page">
+  <!-- Preload Screen -->
+  <div id="preload-screen">
+    <div id="preload-title">NOW LOADING</div>
+    <div id="preload-bar-wrap"><div id="preload-bar"></div></div>
+    <div id="preload-pct">0%</div>
+  </div>
+
+  <div id="bg-fx">
+    <div id="bg-grid"></div>
+    <div id="bg-glow"></div>
+  </div>
+
+  <!-- Header -->
+  <div id="header">
+    <div class="hdr-side left">
+      <div class="player-tag p1">PLAYER</div>
+      <div class="phase-lbl on" id="lbl1">SELECT</div>
+    </div>
+    <div class="hdr-center">
+      LiverBattle
+      <div id="hdr-tap-hint">ダブルタップでステータス表示</div>
+    </div>
+    <div class="hdr-side right">
+      <div class="player-tag p2">NPC</div>
+      <div class="phase-lbl" id="lbl2">SELECT</div>
+    </div>
+  </div>
+
+  <!-- Character display -->
+  <div id="char-display">
+    <div id="char-splash"></div>
+
+    <!-- Main slot -->
+    <div class="char-slot" id="slot-main">
+      <canvas id="ph-main" width="280" height="520"></canvas>
+      <img id="art-main" alt="">
+    </div>
+
+
+    <div id="char-name">
+      <div id="char-name-jp"></div>
+      <div id="char-name-en"></div>
+    </div>
+  </div>
+
+  <!-- Carousel -->
+  <div id="carousel-wrap">
+    <div id="carousel-mask">
+      <div id="carousel-track"></div>
+    </div>
+  </div>
+
+  <!-- Decide button -->
+  <div id="decide-wrap">
+    <button class="nav-btn p1-nav" id="nav-prev" onclick="navPrev()">&#9664;</button>
+    <button id="decide-btn" onclick="onDecide()">SELECT</button>
+    <button class="nav-btn p1-nav" id="nav-next" onclick="navNext()">&#9654;</button>
+  </div>
+
+  <!-- VS Split Screen -->
+  <div id="vs-screen">
+    <div id="vs-mid-line"></div>
+    <div class="vs-half top" id="vs-top">
+      <div class="vs-char-wrap" id="vs-wrap-p2">
+        <canvas id="vs-canvas-p2" width="280" height="520"></canvas>
+        <img id="vs-img-p2" alt="">
+      </div>
+      <div class="vs-name" id="vs-name-p2"></div>
+    </div>
+    <div class="vs-half bot" id="vs-bot">
+      <div class="vs-char-wrap" id="vs-wrap-p1">
+        <canvas id="vs-canvas-p1" width="280" height="520"></canvas>
+        <img id="vs-img-p1" alt="">
+      </div>
+      <div class="vs-name" id="vs-name-p1"></div>
+    </div>
+    <div id="vs-badge">VS</div>
+  </div>
+
+  <!-- Status Modal -->
+  <div id="status-modal">
+    <div style="display:flex;width:100%;">
+    <button id="status-modal-reset" onclick="resetZoom()" style="flex:1;font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:4px;background:#111;border:none;border-bottom:1px solid #2a2a40;border-right:1px solid #2a2a40;color:var(--gray);cursor:pointer;transition:background 0.15s,color 0.15s;padding:12px 0;" onmouseover="this.style.background='#1a1a2a';this.style.color='#fff'" onmouseout="this.style.background='#111';this.style.color='var(--gray)'">↺ RESET</button>
+    <button id="status-modal-close" onclick="closeStatus()" style="flex:1;">× CLOSE</button>
+  </div>
+    <div id="status-modal-inner">
+      <img id="status-modal-img" src="" alt="">
+      <div id="status-modal-no-card" style="text-align:center;">It's a secret.<br>COMING SOON.</div>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <div id="blackout"></div>
+  <div id="slash"></div>
+  <canvas id="sparks"></canvas>
+
+  <!-- BATTLE SCREEN -->
+  <div id="battle-screen">
+
+    <div id="battle-hud-enemy" class="b-hud">
+      <div class="b-hud-top">
+        <span class="b-name-jp" id="enemy-name-jp">——</span>
+        <span class="b-name-job" id="enemy-name-job"></span>
+        <span class="b-hud-stats" id="enemy-stat-inline"></span>
+        <span class="b-action-reveal" id="enemy-action-reveal"></span>
+      </div>
+      <div class="b-hp-row">
+        <div class="b-hp-bar-wrap"><div class="b-hp-bar" id="enemy-hp-bar" style="width:100%"></div></div>
+        <div class="b-hp-text" id="enemy-hp-text">—/—</div>
+      </div>
+      <div class="b-hud-bottom">
+        <div class="b-action-icons" id="enemy-action-icons">
+          <span class="b-act-icon" id="bh-p2-attack">⚔️</span>
+          <span class="b-act-icon" id="bh-p2-barrier">🛡️</span>
+          <span class="b-act-icon" id="bh-p2-magic">✨</span>
+          <span class="b-act-icon" id="bh-p2-charge">⚡</span>
+        </div>
+        <div class="b-status-row" id="enemy-status"></div>
+      </div>
+    </div>
+    <div id="battle-field">
+      <div class="b-char-wrap p1" id="b-char-p1">
+        <canvas id="b-canvas-p1" width="200" height="400"></canvas>
+        <img id="b-img-p1" alt="">
+      </div>
+      <div id="b-center">
+        <div class="b-turn-num" id="b-turn-num">TURN 1</div>
+        <div class="b-center-vs">VS</div>
+      </div>
+      <div class="b-char-wrap p2" id="b-char-p2">
+        <canvas id="b-canvas-p2" width="200" height="400"></canvas>
+        <img id="b-img-p2" alt="">
+      </div>
+      <!-- カットインオーバーレイ -->
+      <div id="cutin-overlay">
+        <div class="cutin-band" id="cutin-band-p2">
+          <span class="cutin-sub" id="cutin-p2-sub"></span>
+          <span class="cutin-action-name" id="cutin-p2-name"></span>
+        </div>
+        <div class="cutin-band" id="cutin-band-p1">
+          <span class="cutin-action-name" id="cutin-p1-name"></span>
+          <span class="cutin-sub" id="cutin-p1-sub"></span>
+        </div>
+      </div>
+      <!-- 回避ポップアップ -->
+      <div id="evade-popup"></div>
+    </div>
+    <div id="battle-log-wrap">
+      <div id="battle-log"><div id="battle-log-list"></div></div>
+      <div id="battle-log-nav">
+        <button class="log-nav-btn" onclick="scrollLog(-1)">▲</button>
+        <button class="log-nav-btn" onclick="scrollLog(1)">▼</button>
+      </div>
+    </div>
+    <div id="battle-hud-player" class="b-hud">
+      <div class="b-hud-top">
+        <span class="b-name-jp" id="player-name-jp">——</span>
+        <span class="b-name-job" id="player-name-job"></span>
+        <span class="b-hud-stats" id="player-stat-inline"></span>
+      </div>
+      <div class="b-hp-row">
+        <div class="b-hp-bar-wrap"><div class="b-hp-bar" id="player-hp-bar" style="width:100%"></div></div>
+        <div class="b-hp-text" id="player-hp-text">—/—</div>
+      </div>
+      <div class="b-hud-bottom">
+        <div class="b-status-row" id="player-status"></div>
+      </div>
+    </div>
+    <div id="battle-commands">
+      <div id="battle-action-btns">
+        <button class="b-cmd-btn" id="btn-atk" onclick="selectAction('attack')"><span class="b-cmd-icon">⚔️</span><span class="b-cmd-label">アタック</span></button>
+        <button class="b-cmd-btn" id="btn-bar" onclick="selectAction('barrier')"><span class="b-cmd-icon">🛡️</span><span class="b-cmd-label">バリア</span></button>
+        <button class="b-cmd-btn" id="btn-mag" onclick="openMagicMenu()"><span class="b-cmd-icon">✨</span><span class="b-cmd-label">マジック</span></button>
+        <button class="b-cmd-btn" id="btn-chg" onclick="selectAction('charge')"><span class="b-cmd-icon">⚡</span><span class="b-cmd-label">チャージ</span></button>
+      </div>
+      <div id="magic-menu" style="display:none">
+        <div id="magic-options"></div>
+        <button class="b-back-btn" onclick="closeMagicMenu()">← 戻る</button>
+      </div>
+      <div id="battle-confirm-row">
+        <div id="selected-action-display">コマンドを選択して「戦闘開始」を押してください</div>
+        <button id="btn-confirm-turn" onclick="confirmTurn()" disabled>戦闘開始</button>
+        <button id="btn-rule-help" onclick="openRuleModal()">？</button>
+        <button id="btn-battle-abort" onclick="abortBattle()" title="バトル中止">✕</button>
+      </div>
+    </div>
+    <!-- 中止確認モーダル -->
+    <div id="abort-modal">
+      <div id="abort-modal-inner">
+        <div class="abort-title">バトルを中止しますか？</div>
+        <div class="abort-btns">
+          <button class="abort-no"  onclick="closeAbortModal()">NO</button>
+          <button class="abort-yes" onclick="confirmAbort()">YES</button>
+        </div>
+      </div>
+    </div>
+    <div id="rule-modal">
+      <div id="rule-modal-inner">
+        <div class="rule-title">ルール</div>
+
+        <!-- 基本ルール -->
+        <div class="rule-section">
+          <div class="rule-sec-title">基本ルール</div>
+          <div class="rule-row"><span class="rule-icon">⚔️</span><span class="rule-beats">→</span><span class="rule-icon">🛡️</span><span class="rule-desc">アタックはバリアを突き破る</span></div>
+          <div class="rule-row"><span class="rule-icon">🛡️</span><span class="rule-beats">→</span><span class="rule-icon">✨</span><span class="rule-desc">バリアはマジックを反射する</span></div>
+          <div class="rule-row"><span class="rule-icon">✨</span><span class="rule-beats">→</span><span class="rule-icon">⚔️</span><span class="rule-desc">マジックはアタックを上回る</span></div>
+        </div>
+
+        <div class="rule-section">
+          <div class="rule-sec-title">チャージ ⚡</div>
+          <div class="rule-text">HP小回復。どの攻撃も受けるが、次のターン攻撃力が2倍になる。チャージ中に倒れそうな時、LUKでHP1生存（食いしばり）の可能性あり。</div>
+        </div>
+        <div class="rule-section">
+          <div class="rule-sec-title">連続使用禁止</div>
+          <div class="rule-text">同じ行動は2回連続で使えない。</div>
+        </div>
+        <div class="rule-section">
+          <div class="rule-sec-title">SPD先攻</div>
+          <div class="rule-text">SPDが高い方が先に攻撃。先攻で相手HPが0になれば後攻は行動不能。</div>
+        </div>
+        <div class="rule-section">
+          <div class="rule-sec-title">マジックの種類（MP依存）</div>
+          <div class="rule-row-sm">MP1〜3：ノーマル（高威力）のみ</div>
+          <div class="rule-row-sm">MP4〜6：スタン（次ターン行動不能）・デバフ（ステ低下）</div>
+          <div class="rule-row-sm">MP7以上：固有技（ユニークマジック）が発動可能。</div>
+        </div>
+        <div class="rule-section">
+          <div class="rule-sec-title">固有技（ユニークマジック）</div>
+          <div class="rule-text">DEF値によるダメージ軽減を無視できるため大ダメージとなる。ただし発動までには1ターン以上のMPチャージが必要であり、発動後も再使用には一度別の行動が必要。準備中は「MPチャージ中」と表示される。</div>
+        </div>
+        <div class="rule-section">
+          <div class="rule-sec-title">回避 / クリティカル</div>
+          <div class="rule-text">SPD・LUKで回避率が決まる。LUKでクリティカル（×1.2）が発生することも。</div>
+        </div>
+        <div class="rule-skip-row">
+          <label class="rule-skip-label">
+            <input type="checkbox" id="rule-skip-check" onchange="onRuleSkipChange()">
+            次回以降バトル開始時に表示しない
+          </label>
+        </div>
+        <button class="rule-close-btn" onclick="closeRuleModal()">× CLOSE</button>
+      </div>
+    </div>
+    <div id="battle-result">
+      <div id="battle-result-bg"></div>
+      <div id="battle-result-title">RESULT</div>
+      <div id="battle-result-sub"></div>
+      <button id="battle-result-back" onclick="returnToSelect()">RETURN TO SELECT</button>
+      <button id="battle-result-log" onclick="openLogModal()">BATTLE LOG</button>
+    </div>
+    <div id="log-modal">
+      <div id="log-modal-inner">
+        <div id="log-modal-title">BATTLE LOG</div>
+        <div id="log-modal-body"></div>
+        <button class="rule-close-btn" onclick="closeLogModal()">× CLOSE</button>
+      </div>
+    </div>
+  </div><!-- /#battle-screen -->
+
+</div>
+
+<script>
+// ── ユーティリティ ──
+const $ = id => document.getElementById(id);
+
+/* =====================================================
+   キャラクターデータ
+   icon : カルーセル用画像（正方形推奨）
+   art  : 立ち絵用PNG（透過推奨、縦長）
+   ===================================================== */
+// キャラデータ（フォールバック用インライン定義）
+// chars.json が読み込めた場合はそちらを優先
+const CHARS_DEFAULT = [
+  { id:'c1a', charId:'c1', jp:'五尺太刀折襟京野', color:'#50a060', colorLabel:'A', face:'image/face_01.png', bg:'image/bg_01.png', vs:'image/vs_01.png', card:'image/card_01.png' },
+  { id:'c2a', charId:'c2', jp:'擬似双剣奇術幻海', color:'#6070d0', colorLabel:'A', face:'image/face_02.png', bg:'image/bg_02.png', vs:'image/vs_02.png', card:'image/card_02.png' },
+  { id:'c3a', charId:'c3', jp:'十字戦槌修道幻海', color:'#3858a0', colorLabel:'A', face:'image/face_03.png', bg:'image/bg_03.png', vs:'image/vs_03.png', card:'image/card_03.png' },
+  { id:'c4a', charId:'c4', jp:'西洋長剣正装幻海', color:'#c8b060', colorLabel:'A', face:'image/face_04.png', bg:'image/bg_04.png', vs:'image/vs_04.png', card:'image/card_04.png' },
+  { id:'c5a', charId:'c5', jp:'魔導拳鎧接待幻海', color:'#9090c8', colorLabel:'A', face:'image/face_05.png', bg:'image/bg_05.png', vs:'image/vs_05.png', card:'image/card_05.png' },
+  { id:'rnd',  charId:'rnd', jp:'ランダム', color:'#556677', colorLabel:'', face:'', bg:'', vs:'', card:'', isRandom:true },
+  { id:'c2b', charId:'c2b', jp:'奇術師オルタ', color:'#1a1a3a', colorLabel:'β', face:'image/boss_face.png', bg:'image/boss_bg_02.png', vs:'image/boss_vs_02.png', card:'image/boss_card.png', baseFace:'image/face_02.png', baseBg:'image/bg_02.png', baseVs:'image/vs_02.png', isNpcOnly:true, isBoss:true },
+  { id:'c3b', charId:'c3b', jp:'修道女オルタ', color:'#1a0a0a', colorLabel:'β', face:'image/boss_face.png', bg:'image/boss_bg_03.png', vs:'image/boss_vs_03.png', card:'image/boss_card.png', baseFace:'image/face_03.png', baseBg:'image/bg_03.png', baseVs:'image/vs_03.png', isNpcOnly:true, isBoss:true },
+];
+
+let CHARS = [];
+
+async function loadChars() {
+  try {
+    const res = await fetch('chars.json');
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+    CHARS = data.characters;
+    const rndEntry = { id:'rnd', charId:'rnd', jp:'ランダム', color:'#556677', colorLabel:'', face:'', bg:'', vs:'', card:'', isRandom:true };
+    // ボスの前にランダムを挿入（ボスがなければ末尾）
+    const bossIdx = data.characters.findIndex(c => c.isNpcOnly);
+    if (bossIdx >= 0) {
+      CHARS.splice(bossIdx, 0, rndEntry);
+    } else {
+      CHARS.push(rndEntry);
+    }
+    // chars.jsonのstatsからCHAR_STATSを上書き構築
+    data.characters.forEach(ch => {
+      if (ch.stats && ch.charId && ch.charId !== 'rnd') {
+        CHAR_STATS[ch.charId] = ch.stats;
+      }
+    });
+    console.log('chars.json 読み込み成功（キャラ数:', CHARS.length, '）');
+  } catch(e) {
+    console.warn('chars.json 読み込み失敗、インラインデータを使用:', e);
+    CHARS = CHARS_DEFAULT;
+    // CHAR_STATSはコード内のものをそのまま使用
+  }
+}
+
+const KEYS_P1 = { left:'KeyA', right:'KeyD', ok:'Space' };
+const KEYS_P2 = { left:'ArrowLeft', right:'ArrowRight', ok:'Enter' };
+
+/* ── State ── */
+const state = {
+  phase: 'p1',       // 'p1' | 'p2' | 'intro' | 'done'
+  p1: { idx:0, char:null },
+  p2: { idx:0, char:null },
+  curIdx: 0,         // current carousel center index
+};
+
+/* ── Placeholder art ── */
+function drawPlaceholder(canvas, char, flip=false, mini=false) {
+  const ctx = canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  if (!char) return;
+
+  ctx.save();
+  if (flip) { ctx.translate(W,0); ctx.scale(-1,1); }
+
+  const cx = W * 0.5;
+  const silCol = '#1a1a1a';
+
+  if (char.isRandom) {
+    ctx.fillStyle='#222';
+    ctx.font=`bold ${W*.45}px Bebas Neue,monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('?', cx, H*.45);
+    ctx.restore(); return;
+  }
+
+  // 胴体 — 三角形
+  ctx.fillStyle = silCol;
+  ctx.beginPath();
+  ctx.moveTo(cx, H*.72);          // 下頂点
+  ctx.lineTo(cx - W*.28, H*.32);  // 左肩
+  ctx.lineTo(cx + W*.28, H*.32);  // 右肩
+  ctx.closePath(); ctx.fill();
+
+  // 頭 — 丸
+  ctx.beginPath();
+  ctx.arc(cx, H*.18, W*.14, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* ── ボスシルエット描画（canvas） ── */
+function drawSilhouette(canvas, src, color) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(img, 0, 0, W, H);
+    // ピクセルを黒に塗りつぶし（アルファ保持）
+    const d = ctx.getImageData(0, 0, W, H);
+    for (let i = 0; i < d.data.length; i += 4) {
+      if (d.data[i+3] > 10) {
+        d.data[i]   = 10;
+        d.data[i+1] = 10;
+        d.data[i+2] = 20;
+      }
+    }
+    ctx.putImageData(d, 0, 0);
+  };
+  img.onerror = () => drawPlaceholder(canvas, { color: color || '#111' });
+  img.crossOrigin = 'anonymous';
+  img.src = src;
+}
+
+function drawIconPlaceholder(canvas, char) {
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  // 背景
+  ctx.fillStyle='#0f0f1c'; ctx.fillRect(0,0,W,H);
+
+  if (char.isRandom) {
+    ctx.fillStyle='#444'; ctx.font=`bold ${W*.42}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('?',W/2,H*.42);
+    ctx.fillStyle='#444'; ctx.font=`600 ${W*.1}px Rajdhani,sans-serif`;
+    ctx.textBaseline='bottom';
+    ctx.fillText('RANDOM',W/2,H*.88);
+    return;
+  }
+
+  const cx=W/2, sil='#1e1e1e';
+
+  // 胴体 — 三角形
+  ctx.fillStyle=sil;
+  ctx.beginPath();
+  ctx.moveTo(cx, H*.72);
+  ctx.lineTo(cx-W*.28, H*.32);
+  ctx.lineTo(cx+W*.28, H*.32);
+  ctx.closePath(); ctx.fill();
+
+  // 頭
+  ctx.beginPath(); ctx.arc(cx, H*.18, W*.13, 0, Math.PI*2); ctx.fill();
+}
+
+/* ── Build carousel ── */
+const track = document.getElementById('carousel-track');
+const cardW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-w'));
+const gap   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+
+function buildCarousel() {
+  track.innerHTML = '';
+  CHARS.forEach((ch, i) => {
+    const card  = document.createElement('div');
+    card.className = 'c-card'; card.dataset.i = i;
+
+    const inner = document.createElement('div'); inner.className = 'c-inner';
+    const pulse = document.createElement('div'); pulse.className = 'c-pulse';
+
+    if (ch.isRandom) {
+      const cvs = document.createElement('canvas');
+      cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
+      drawIconPlaceholder(cvs, ch);
+      inner.appendChild(cvs);
+    } else if (ch.isBoss) {
+      // ボス：専用画像 or ベース画像をシルエット化
+      const cvs = document.createElement('canvas');
+      cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
+      inner.appendChild(cvs);
+      // 専用顔画像を試みる → 失敗したらベース画像でシルエット
+      const testImg = new Image();
+      testImg.onload = () => {
+        const ctx = cvs.getContext('2d');
+        ctx.drawImage(testImg, 0, 0, 72, 72);
+        const d = ctx.getImageData(0, 0, 72, 72);
+        for (let i = 0; i < d.data.length; i += 4) {
+          if (d.data[i+3] > 10) { d.data[i]=10; d.data[i+1]=10; d.data[i+2]=20; }
+        }
+        ctx.putImageData(d, 0, 0);
+      };
+      testImg.onerror = () => drawSilhouette(cvs, ch.baseFace, ch.color);
+      testImg.src = ch.face;
+      // NPC限定ラベル
+      const npcTag = document.createElement('div');
+      npcTag.style.cssText = 'position:absolute;bottom:2px;left:0;right:0;text-align:center;font-family:"Bebas Neue",sans-serif;font-size:7px;letter-spacing:2px;color:#ff4444;pointer-events:none;';
+      npcTag.textContent = 'NPC ONLY';
+      inner.appendChild(npcTag);
+    } else if (ch.face) {
+      const img = document.createElement('img');
+      img.className = 'c-img'; img.src = ch.face; img.alt = ch.jp;
+      img.style.display = 'block';
+      img.onerror = () => {
+        img.style.display = 'none';
+        const cvs = document.createElement('canvas');
+        cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
+        drawIconPlaceholder(cvs, ch);
+        inner.appendChild(cvs);
+      };
+      inner.appendChild(img);
+    } else {
+      const cvs = document.createElement('canvas');
+      cvs.className = 'c-canvas'; cvs.width = 72; cvs.height = 72;
+      drawIconPlaceholder(cvs, ch);
+      inner.appendChild(cvs);
+    }
+
+    const b1 = document.createElement('div'); b1.className = 'c-badge p1'; b1.textContent = '✓';
+    const b2 = document.createElement('div'); b2.className = 'c-badge p2'; b2.textContent = '✓';
+
+    card.appendChild(inner); card.appendChild(pulse);
+    card.appendChild(b1); card.appendChild(b2);
+    track.appendChild(card);
+
+    card.addEventListener('click', () => {
+      if (state.phase !== 'p1' && state.phase !== 'p2') return;
+      const p = state.phase;
+      const other = p === 'p1' ? state.p2.char : state.p1.char;
+      if (other && CHARS[i] && CHARS[i].id === other.id) return;
+      state[p].cur = i;
+      applyCarousel(i);
+      updatePhaseUI();
+      showPreview(CHARS[i]);
+    });
+  });
+}
+
+/* ── Carousel positioning ── */
+function getContainerW() {
+  return document.getElementById('carousel-mask').offsetWidth;
+}
+
+function getOffset(idx) {
+  // Center the idx-th card
+  const cw = getContainerW();
+  const itemW = cardW + gap;
+  return (cw / 2) - (itemW * idx) - cardW / 2;
+}
+
+function applyCarousel(idx, animate=true) {
+  const cards = track.querySelectorAll('.c-card');
+  if (!animate) track.classList.add('no-transition');
+  track.style.transform = `translateX(${getOffset(idx)}px)`;
+  if (!animate) requestAnimationFrame(() => track.classList.remove('no-transition'));
+
+  const ph = state.phase;
+  cards.forEach((c,i) => {
+    const active = i===idx;
+    c.classList.toggle('active', active);
+    c.classList.toggle('p2-active', active && ph==='p2');
+  });
+}
+
+/* ── Move cursor ── */
+function moveTo(idx, preview=true, dir=0) {
+  const len = CHARS.length;
+  idx = ((idx % len) + len) % len;
+  const step = dir >= 0 ? 1 : -1;
+  let tries = 0;
+  // P1：ボスをスキップ / P2：P1と同じカードをスキップ（ランダム選択時除く）
+  while (tries < len) {
+    const ch = CHARS[idx];
+    const skipBoss = state.phase === 'p1' && ch && ch.isNpcOnly;
+    const skipSame = state.phase === 'p2' && state.p1.char && !CHARS[state.p1.idx].isRandom && ch && ch.id === state.p1.char.id;
+    if (!skipBoss && !skipSame) break;
+    idx = ((idx + step) % len + len) % len;
+    tries++;
+  }
+  state.curIdx = idx;
+  applyCarousel(idx);
+  if (preview && state.phase !== 'intro') showPreview(CHARS[idx]);
+}
+
+/* ── Show preview in main slot ── */
+function showPreview(char) {
+  const phMain = $('ph-main');
+  const artMain = $('art-main');
+  const nameEl  = $('char-name');
+  const nameJp  = $('char-name-jp');
+
+  // Fade out
+  nameEl.classList.remove('show');
+
+  if (!char) {
+    drawPlaceholder(phMain, null);
+    phMain.style.opacity='0';
+    $('char-splash').style.opacity='0';
+    return;
+  }
+
+  // Splash color
+  const isP2 = state.phase==='p2';
+  $('char-splash').style.background = char.color;
+  $('char-splash').style.opacity='1';
+  $('bg-glow').style.background =
+    `radial-gradient(ellipse at 50% 40%, ${char.color}0d 0%, transparent 65%)`;
+
+  // Art — bg画像（背景あり、cover表示）
+  if (char.isRandom) {
+    currentChar = null;
+    artMain.style.display='none';
+    phMain.style.display='block';
+    phMain.style.opacity='1';
+    const ctx = phMain.getContext('2d');
+    const W = phMain.width, H = phMain.height;
+    ctx.clearRect(0,0,W,H);
+    // ？
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = 0.12;
+    ctx.font = `bold ${W*.6}px Bebas Neue, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', W/2, H*.44);
+    // RANDOM
+    ctx.globalAlpha = 0.35;
+    ctx.font = `bold ${W*.1}px Bebas Neue, monospace`;
+    ctx.textBaseline = 'top';
+    ctx.letterSpacing = '4px';
+    ctx.fillText('RANDOM', W/2, H*.72);
+    ctx.globalAlpha = 1;
+    $('char-splash').style.opacity='0';
+    // 名前欄も非表示
+    nameEl.classList.remove('show');
+    return;
+  } else if (char.isBoss) {
+    // ボス：専用bg画像 → 失敗したらベース画像をシルエット化
+    artMain.style.display='none';
+    phMain.style.display='block';
+    phMain.style.opacity='1';
+    const testBossImg = new Image();
+    testBossImg.onload = () => { artMain.src=char.bg; artMain.style.display='block'; phMain.style.display='none'; };
+    testBossImg.onerror = () => drawSilhouette(phMain, char.baseBg || char.baseFace, char.color);
+    testBossImg.src = char.bg;
+  } else {
+    artMain.onerror = () => {
+      artMain.style.display='none';
+      phMain.style.display='block';
+      drawPlaceholder(phMain, char, isP2);
+    };
+    if (char.bg) {
+      artMain.src=char.bg; artMain.style.display='block';
+      phMain.style.display='none';
+    } else {
+      artMain.style.display='none';
+      phMain.style.display='block';
+      drawPlaceholder(phMain, char, isP2);
+    }
+    phMain.style.opacity='1';
+  }
+
+  setTimeout(() => {
+    if (char.isRandom) return; // ランダムは名前欄を出さない
+    nameJp.textContent = char.jp;
+    nameEl.classList.add('show');
+    currentChar = char;
+  }, 80);
+}
+
+/* ── Confirm selection ── */
+function onDecide() {
+  const ph = state.phase;
+  if (ph!=='p1' && ph!=='p2') return;
+
+  let char = CHARS[state.curIdx];
+  // P1はボスを選択できない
+  if (ph === 'p1' && char.isNpcOnly) return;
+  if (char.isRandom) {
+    // ランダム解決は両者決定後にstartIntro直前で行う
+    // ここでは仮キャラとして自分自身を保持（isRandomフラグ付き）
+  } else {
+    // 相手が通常キャラ選択の場合のみ被りチェック
+    const other = ph==='p1' ? state.p2.char : state.p1.char;
+    const otherWasRandom = ph==='p2' && CHARS[state.p1.idx] && CHARS[state.p1.idx].isRandom;
+    if (!otherWasRandom && other && char.id === other.id) return;
+  }
+
+  state[ph].char = char;
+  state[ph].idx  = state.curIdx;
+
+  // Badge
+  const cards = track.querySelectorAll('.c-card');
+  cards[state.curIdx].querySelector(`.c-badge.${ph}`).style.display='flex';
+
+  flash(); SE.confirm();
+
+  if (ph==='p1') {
+    // P1 locked — switch to P2
+    state.phase='p2';
+    // P1と同じidでない最初のカードに飛ぶ
+    const p1char = state.p1.char;
+    let nextIdx = (state.p1.idx + 1) % (CHARS.length - 1);
+    for (let n = 0; n < CHARS.length; n++) {
+      const c = CHARS[nextIdx];
+      if (!c.isRandom && !c.isNpcOnly && (!p1char || c.id !== p1char.id)) break;
+      nextIdx = (nextIdx + 1) % (CHARS.length - 1);
+    }
+    state.curIdx = nextIdx;
+    applyCarousel(state.curIdx);
+    const nextChar = CHARS[state.curIdx];
+    if (!nextChar.isRandom) showPreview(nextChar);
+    updatePhaseUI();
+  } else {
+    // P2 locked — ランダムを解決してからintro
+    state.phase='intro';
+    updatePhaseUI();
+    resolveRandom();
+    setTimeout(startIntro, T.INTRO_DELAY);
+  }
+}
+
+function updatePhaseUI() {
+  const ph = state.phase;
+  $('lbl1').classList.toggle('on', ph==='p1');
+  $('lbl2').classList.toggle('on', ph==='p2');
+
+  // 相手が通常キャラを選択している場合のみグレーアウト（ランダム選択時はグレーアウトなし）
+  const otherChar = ph==='p1' ? state.p2.char : state.p1.char;
+  const otherIsRandom = ph==='p2' && state.p1.idx !== null && CHARS[state.p1.idx] && CHARS[state.p1.idx].isRandom;
+  const allCards = track.querySelectorAll('.c-card');
+  allCards.forEach((c, i) => {
+    const ch = CHARS[i];
+    const blockedByOther = !otherIsRandom && otherChar && ch && ch.id === otherChar.id;
+    const blockedByNpc = ph === 'p1' && ch && ch.isNpcOnly;
+    if (blockedByNpc) {
+      // P1フェーズではボスカードを完全非表示
+      c.style.display = 'none';
+    } else {
+      c.style.display = '';
+      c.style.opacity = blockedByOther ? '0.25' : '';
+      c.style.pointerEvents = blockedByOther ? 'none' : '';
+    }
+  });
+  const btn = $('decide-btn');
+  btn.classList.toggle('p2', ph==='p2');
+
+  const navClass = ph==='p2' ? 'p2-nav' : 'p1-nav';
+  ['nav-prev','nav-next'].forEach(id => {
+    const el=document.getElementById(id);
+    el.className = 'nav-btn ' + navClass;
+  });
+
+  // Re-style active card border
+  const cards = track.querySelectorAll('.c-card');
+  cards.forEach((c,i) => c.classList.toggle('p2-active', i===state.curIdx && ph==='p2'));
+}
+
+/* ── ランダム解決 ── */
+function resolveRandom() {
+  const nonRandom = CHARS.filter(c => !c.isRandom);
+
+  // P1がランダムの場合
+  if (CHARS[state.p1.idx] && CHARS[state.p1.idx].isRandom) {
+    const pool = nonRandom.filter(c => !state.p2.char || state.p2.char.isRandom || c.id !== state.p2.char.id);
+    state.p1.char = pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // P2がランダムの場合
+  if (CHARS[state.p2.idx] && CHARS[state.p2.idx].isRandom) {
+    const pool = nonRandom.filter(c => !state.p1.char || c.id !== state.p1.char.id);
+    state.p2.char = pool[Math.floor(Math.random() * pool.length)];
+  }
+}
+
+/* ── Intro sequence ── */
+function startIntro() {
+  const p1char = state.p1.char;
+  const p2char = state.p2.char;
+
+  // P2 art (top half = vs-wrap-p2, slides from right)
+  const cvP2=$('vs-canvas-p2'), imgP2=$('vs-img-p2');
+  imgP2.onerror = () => { imgP2.style.display='none'; cvP2.style.display='block'; drawPlaceholder(cvP2, p2char, false); };
+  if (p2char && p2char.vs) { imgP2.src=p2char.vs; imgP2.style.display='block'; cvP2.style.display='none'; }
+  else { cvP2.style.display='block'; imgP2.style.display='none'; drawPlaceholder(cvP2, p2char, false); }
+
+  // P1 art (bottom half = vs-wrap-p1, slides from left)
+  const cvP1=$('vs-canvas-p1'), imgP1=$('vs-img-p1');
+  imgP1.onerror = () => { imgP1.style.display='none'; cvP1.style.display='block'; drawPlaceholder(cvP1, p1char, false); };
+  if (p1char && p1char.vs) { imgP1.src=p1char.vs; imgP1.style.display='block'; cvP1.style.display='none'; }
+  else { cvP1.style.display='block'; imgP1.style.display='none'; drawPlaceholder(cvP1, p1char, false); }
+
+  $('vs-name-p2').textContent = p2char ? p2char.jp : '？？？';
+  $('vs-name-p1').textContent = p1char ? p1char.jp : '？？？';
+
+  // ボスが上（p2）にいる時は上ブロックのみピンクに
+  $('vs-top').style.background = (p2char && p2char.isBoss) ? BOSS_COLOR : '';
+  $('vs-bot').style.background = (p1char && p1char.isBoss) ? BOSS_COLOR : '';
+  $('vs-top').classList.toggle('boss', !!(p2char && p2char.isBoss));
+  $('vs-bot').classList.toggle('boss', !!(p1char && p1char.isBoss));
+  $('vs-screen').classList.add('show');
+
+  const p2IsBoss = !!(p2char && p2char.isBoss);
+  const p1IsBoss = !!(p1char && p1char.isBoss);
+
+  // P2登場（上ブロック）
+  setTimeout(() => {
+    if (p2IsBoss) {
+      $('vs-wrap-p2').classList.add('boss-in');
+    } else {
+      $('vs-wrap-p2').classList.add('in');
+    }
+    $('vs-name-p2').classList.add('show');
+  }, T.VS_P2_SLIDE);
+
+  // P1登場（下ブロック）
+  setTimeout(() => {
+    if (p1IsBoss) {
+      $('vs-wrap-p1').classList.add('boss-in');
+    } else {
+      $('vs-wrap-p1').classList.add('in');
+    }
+    $('vs-name-p1').classList.add('show');
+  }, T.VS_P1_SLIDE);
+  setTimeout(() => $('vs-badge').classList.add('show'), T.VS_BADGE);
+  setTimeout(() => { $('slash').classList.add('on'); spawnSparks(); }, T.VS_SLASH);
+  setTimeout(() => flash(true), T.VS_FLASH);
+  setTimeout(() => $('blackout').classList.add('on'), T.VS_BLACKOUT);
+  setTimeout(startBattle, T.VS_END);
+}
+
+function resetAll() {
+  $('blackout').classList.remove('on');
+  $('slash').classList.remove('on');
+  $('vs-top').style.background = '';
+  $('vs-bot').style.background = '';
+  $('vs-top').classList.remove('boss');
+  $('vs-bot').classList.remove('boss');
+  $('vs-screen').classList.remove('show');
+  ['vs-wrap-p1','vs-wrap-p2'].forEach(id => $(id).classList.remove('in', 'boss-in'));
+  ['vs-name-p1','vs-name-p2','vs-badge'].forEach(id => $(id).classList.remove('show'));
+
+  state.phase='p1'; state.p1={idx:0,char:null}; state.p2={idx:0,char:null}; state.curIdx=0;
+  track.querySelectorAll('.c-badge').forEach(b=>b.style.display='none');
+  applyCarousel(0, false);
+  showPreview(CHARS[0]);
+  updatePhaseUI();
+  $('lbl1').classList.add('on');
+}
+
+/* ── Touch / drag carousel ── */
+let drag = { active:false, startX:0, startOffset:0, moved:false };
+
+function getCurrentOffset() {
+  const m = new DOMMatrix(getComputedStyle(track).transform);
+  return m.m41;
+}
+
+track.addEventListener('pointerdown', e => {
+  if (state.phase==='intro') return;
+  drag.active=true; drag.moved=false;
+  drag.startX = e.clientX;
+  drag.startOffset = getCurrentOffset();
+  track.classList.add('dragging');
+  track.setPointerCapture(e.pointerId);
+});
+
+track.addEventListener('pointermove', e => {
+  if (!drag.active) return;
+  const dx = e.clientX - drag.startX;
+  if (Math.abs(dx)>4) drag.moved=true;
+  track.style.transform=`translateX(${drag.startOffset+dx}px)`;
+});
+
+track.addEventListener('pointerup', e => {
+  if (!drag.active) return;
+  drag.active=false;
+  track.classList.remove('dragging');
+
+  if (!drag.moved) {
+    // Tap on card → move cursor there
+    const card = e.target.closest('.c-card');
+    if (card) moveTo(parseInt(card.dataset.i));
+    return;
+  }
+
+  // Snap to nearest
+  const cw = getContainerW();
+  const itemW = cardW + gap;
+  const offset = getCurrentOffset();
+  // Invert to find center index
+  const centerX = cw/2 - offset;
+  let idx = Math.round((centerX - cardW/2) / itemW);
+  idx = Math.max(0, Math.min(CHARS.length-1, idx));
+  moveTo(idx);
+});
+
+/* ── Nav arrow buttons ── */
+function navPrev() { moveTo(state.curIdx-1, true, -1); }
+function navNext() { moveTo(state.curIdx+1, true, 1); }
+
+/* ── Keyboard ── */
+document.addEventListener('keydown', e => {
+  const ph=state.phase;
+  if (ph!=='p1' && ph!=='p2') return;
+  const k = ph==='p1' ? KEYS_P1 : KEYS_P2;
+  if (e.code===k.left)  { e.preventDefault(); moveTo(state.curIdx-1, true, -1); }
+  if (e.code===k.right) { e.preventDefault(); moveTo(state.curIdx+1, true, 1); }
+  if (e.code===k.ok)    { e.preventDefault(); onDecide(); }
+});
+
+/* ── Sparks ── */
+function spawnSparks() {
+  const cvs=$('sparks');
+  const pg=$('page');
+  cvs.width=pg.offsetWidth; cvs.height=pg.offsetHeight;
+  const ctx=cvs.getContext('2d');
+  const cx=cvs.width/2, cy=cvs.height*.45;
+  const pts=[];
+  for(let i=0;i<70;i++){
+    const a=Math.random()*Math.PI*2, sp=4+Math.random()*13;
+    pts.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,
+      life:1,dec:.03+Math.random()*.04,sz:1+Math.random()*4,
+      col:Math.random()>.5?'#38d9f5':'#ff8c00'});
+  }
+  function loop(){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    let alive=false;
+    pts.forEach(p=>{
+      if(p.life<=0)return; alive=true;
+      p.x+=p.vx; p.y+=p.vy; p.vy+=.22; p.life-=p.dec;
+      ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle=p.col; ctx.shadowColor=p.col; ctx.shadowBlur=5;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.sz,0,Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha=1; ctx.shadowBlur=0;
+    if(alive) requestAnimationFrame(loop);
+    else ctx.clearRect(0,0,cvs.width,cvs.height);
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ── Flash ── */
+function flash(big=false) {
+  const f=$('flash');
+  f.style.transition='opacity 0.05s'; f.style.opacity=big?'0.9':'0.5';
+  setTimeout(()=>{f.style.transition='opacity 0.25s'; f.style.opacity='0';}, T.FLASH_HIDE);
+}
+
+/* ── Sound（無効化） ── */
+/* ── SE（効果音）── Web Audio API対応スタブ
+   将来の実装: AudioContext + OscillatorNode / AudioBuffer
+   各メソッドを呼び出すだけで音が鳴るよう設計。
+   SE.select()  : コマンド選択音
+   SE.confirm() : 決定音
+   SE.damage()  : ダメージ音
+   SE.evade()   : 回避音
+   SE.cutin()   : カットイン音
+   SE.win()     : 勝利音
+   SE.lose()    : 敗北音
+*/
+const SE = {
+  _ctx: null,
+  _init() {
+    if (this._ctx) return this._ctx;
+    try { this._ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    return this._ctx;
+  },
+  // 各SEは将来ここに実装。今はすべてno-op。
+  select()  {},
+  confirm() {},
+  damage()  {},
+  evade()   {},
+  cutin()   {},
+  win()     {},
+  lose()    {},
+};
+
+/* ── Status Modal ── */
+let currentChar = null;
+
+function openStatus() {
+  if (!currentChar) return;
+  const modal = $('status-modal');
+  const img   = $('status-modal-img');
+  const noCard = $('status-modal-no-card');
+  if (currentChar.card) {
+    img.src = currentChar.card;
+    img.style.display = 'block';
+    noCard.style.display = 'none';
+    img.onerror = () => {
+      img.style.display = 'none';
+      noCard.style.display = 'block';
+    };
+  } else {
+    img.style.display = 'none';
+    noCard.style.display = 'block';
+  }
+  modal.classList.add('show');
+}
+
+function closeStatus() {
+  $('status-modal').classList.remove('show');
+  resetZoom();
+}
+
+/* ── ズーム・パン ── */
+const zoomState = { scale:1, x:0, y:0, minScale:1, maxScale:5 };
+let isPanning = false, panStart = {x:0, y:0}, panOrigin = {x:0, y:0};
+let lastPinchDist = 0;
+
+function getImg() { return $('status-modal-img'); }
+
+function applyTransform() {
+  const img = getImg();
+  img.style.transform = `translate(${zoomState.x}px, ${zoomState.y}px) scale(${zoomState.scale})`;
+}
+
+function resetZoom() {
+  zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+  const img = getImg();
+  if (img) {
+    img.style.transition = 'transform 0.3s ease';
+    applyTransform();
+    setTimeout(() => img.style.transition = '', T.PRELOAD_HIDE);
+  }
+}
+
+function pinchDist(t) {
+  const dx = t[0].clientX - t[1].clientX;
+  const dy = t[0].clientY - t[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const img = getImg();
+  if (!img) return;
+
+  // ── マウスホイール（PC拡大縮小） ──
+  img.addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.85 : 1.18;
+    zoomState.scale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.scale * delta));
+    applyTransform();
+  }, { passive:false });
+
+  // ── マウスドラッグ（PC移動） ──
+  img.addEventListener('mousedown', e => {
+    if (zoomState.scale <= 1) return;
+    isPanning = true;
+    panStart = { x:e.clientX, y:e.clientY };
+    panOrigin = { x:zoomState.x, y:zoomState.y };
+    img.classList.add('grabbing');
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!isPanning) return;
+    zoomState.x = panOrigin.x + (e.clientX - panStart.x);
+    zoomState.y = panOrigin.y + (e.clientY - panStart.y);
+    applyTransform();
+  });
+  window.addEventListener('mouseup', () => {
+    isPanning = false;
+    getImg().classList.remove('grabbing');
+  });
+
+  // ── ダブルクリックでリセット ──
+  let lastClick = 0;
+  img.addEventListener('click', () => {
+    const now = Date.now();
+    if (now - lastClick < 300) resetZoom();
+    lastClick = now;
+  });
+
+  // ── タッチ（スマホ） ──
+  img.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      lastPinchDist = pinchDist(e.touches);
+    } else if (e.touches.length === 1) {
+      isPanning = true;
+      panStart  = { x:e.touches[0].clientX, y:e.touches[0].clientY };
+      panOrigin = { x:zoomState.x, y:zoomState.y };
+    }
+  }, { passive:false });
+
+  img.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const dist = pinchDist(e.touches);
+      const delta = dist / lastPinchDist;
+      zoomState.scale = Math.max(zoomState.minScale, Math.min(zoomState.maxScale, zoomState.scale * delta));
+      lastPinchDist = dist;
+      applyTransform();
+    } else if (e.touches.length === 1 && isPanning) {
+      zoomState.x = panOrigin.x + (e.touches[0].clientX - panStart.x);
+      zoomState.y = panOrigin.y + (e.touches[0].clientY - panStart.y);
+      applyTransform();
+    }
+  }, { passive:false });
+
+  img.addEventListener('touchend', e => {
+    e.stopPropagation();
+    // 2本指操作終了（ピンチ終了）→ダブルタップ判定しない
+    if (e.touches.length === 0 && lastPinchDist > 0) {
+      lastPinchDist = 0;
+      isPanning = false;
+      return;
+    }
+    isPanning = false;
+    // 1本指のtouchendのみダブルタップ判定
+    if (e.changedTouches.length === 1 && e.touches.length === 0) {
+      const now = Date.now();
+      if (now - lastClick < 300) { resetZoom(); lastClick = 0; }
+      else lastClick = now;
+    }
+  });
+
+  // モーダル背景タップで閉じる
+  $('status-modal').addEventListener('click', e => {
+    if (e.target === $('status-modal')) closeStatus();
+  });
+
+  // 立ち絵エリア: スワイプ＋ダブルタップ/クリック
+  const display = $('char-display');
+  if (display) {
+    let swipeStartX = 0, swipeStartY = 0, swipeMoved = false, lastTapTime = 0;
+    display.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      swipeStartX = e.touches[0].clientX;
+      swipeStartY = e.touches[0].clientY;
+      swipeMoved  = false;
+    }, { passive:true });
+    display.addEventListener('touchmove', e => {
+      if (e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - swipeStartX;
+      const dy = e.touches[0].clientY - swipeStartY;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) swipeMoved = true;
+    }, { passive:true });
+    display.addEventListener('touchend', e => {
+      if (e.changedTouches.length !== 1) return;
+      const dx = e.changedTouches[0].clientX - swipeStartX;
+      if (swipeMoved) {
+        if (Math.abs(dx) > 30) {
+          if (dx < 0) moveTo(state.curIdx + 1, true, 1);
+          else        moveTo(state.curIdx - 1, true, -1);
+        }
+        return;
+      }
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        if (!currentChar) return;
+        openStatus();
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+      }
+    }, { passive:true });
+
+    // PC: ドラッグスワイプ＋ダブルクリック
+    let mouseStartX = 0, mouseMoved = false, lastClickTime = 0;
+    display.addEventListener('mousedown', e => { mouseStartX = e.clientX; mouseMoved = false; });
+    display.addEventListener('mousemove', e => { if (Math.abs(e.clientX - mouseStartX) > 8) mouseMoved = true; });
+    display.addEventListener('mouseup', e => {
+      const dx = e.clientX - mouseStartX;
+      if (mouseMoved) {
+        if (Math.abs(dx) > 30) { if (dx < 0) moveTo(state.curIdx + 1, true, 1); else moveTo(state.curIdx - 1); }
+        return;
+      }
+      const now = Date.now();
+      if (now - lastClickTime < 300) {
+        if (!currentChar) return;
+        openStatus();
+        lastClickTime = 0;
+      } else {
+        lastClickTime = now;
+      }
+    });
+  }
+});
+
+
+
+/* ── Preload ── */
+function preloadAll(onComplete) {
+  // 全キャラの全画像URLを収集
+  const urls = [];
+  CHARS.forEach(ch => {
+    if (ch.isRandom) return;
+    ['face','bg','vs','card'].forEach(key => {
+      if (ch[key]) urls.push(ch[key]);
+    });
+  });
+
+  if (urls.length === 0) { onComplete(); return; }
+
+  let loaded = 0;
+  const total = urls.length;
+
+  const bar = $('preload-bar');
+  const pct = $('preload-pct');
+
+  function update() {
+    loaded++;
+    const p = Math.round(loaded / total * 100);
+    bar.style.width = p + '%';
+    pct.textContent = p + '%';
+    if (loaded >= total) {
+      setTimeout(onComplete, T.PRELOAD_HIDE);
+    }
+  }
+
+  urls.forEach(url => {
+    const img = new Image();
+    img.onload  = update;
+    img.onerror = update; // 失敗してもカウントは進める
+    img.src = url;
+  });
+}
+
+/* ── Init ── */
+window.addEventListener('load', async () => {
+  await loadChars();
+  buildCarousel();
+  preloadAll(() => {
+    const screen = $('preload-screen');
+    screen.classList.add('fade-out');
+    setTimeout(() => { screen.style.display='none'; }, T.SCREEN_HIDE);
+
+    applyCarousel(0, false);
+    showPreview(CHARS[0]);
+    updatePhaseUI();
+    $('lbl1').classList.add('on');
+  });
+});
+
+/* ═══════════════════════════════════════════════════════
+   BATTLE SYSTEM
+═══════════════════════════════════════════════════════ */
+
+// ── ゲーム定数 ──
+const HP_MULTIPLIER    = 30;   // HPステ → 実HP
+const CHARGE_RECOVER   = 5;    // チャージ回復：HP × この値
+const CRIT_RATE_MULT   = 3;    // LUK × この値 = クリティカル率(%)
+const CRIT_MAGNIFY     = 1.4;  // クリティカル倍率
+const LUCKY_REDUCE_MULT= 4;    // LUK × この値(%) = 被ダメ半減発動率
+const DODGE_SPD_MULT   = 3;    // SPD × この値 = 回避率の一部(%)
+const DODGE_LUK_MULT   = 2;    // LUK × この値 = 回避率の一部(%)
+const RESIST_LUK_MULT  = 5;    // LUK × この値 = 抵抗率(%)
+const SURVIVE_BASE     = 15;   // 食いしばり基礎確率(%)
+const SURVIVE_LUK_MULT = 10;   // LUK × この値 + SURVIVE_BASE = 食いしばり率(%)
+const MAG_EFFECT_MULT  = 0.85; // スタン・デバフマジックの威力係数
+const BARRIER_DMG_MULT = 0.6;  // バリアvs バリアのダメージ係数
+const BOSS_COLOR       = '#FC2392'; // ボス戦VS背景色
+
+// ── タイミング定数（ms）──
+const T = {
+  FLASH_HIDE:     55,   // フラッシュ消去
+  PRELOAD_HIDE:   300,  // プリロード画面フェード後非表示
+  SCREEN_HIDE:    650,  // プリロード画面非表示
+  NAME_SHOW:      80,   // キャラ名フェードイン
+  INTRO_DELAY:    400,  // P2決定→イントロ開始
+  RULE_SHOW:      300,  // バトル開始時ルール表示ディレイ
+  VS_P2_SLIDE:    120,  // VSスクリーンP2スライドイン
+  VS_P1_SLIDE:    320,  // VSスクリーンP1スライドイン
+  VS_BADGE:       700,  // VSバッジ表示
+  VS_SLASH:       950,  // スラッシュ演出
+  VS_FLASH:       1120, // フラッシュ
+  VS_BLACKOUT:    1920, // ブラックアウト開始
+  VS_END:         4200, // バトル開始
+  BATTLE_START:   1500, // バトル画面→最初のターン準備
+  CUTIN_SLIDE:    450,  // カットイン中央停止後
+  CUTIN_RESET:    600,  // カットインリセット
+  STUN_WAIT:      600,  // スタンカットイン後の待機
+  STUN_RESOLVE:   1000, // AI行動表示→ターン解決
+  TURN_RESULT:    800,  // 通常ターン結果→次ターン
+  STUN_RESULT:    1500, // スタンターン結果→次ターン（長め）
+  EVADE_ANIM:     550,  // 回避アニメ
+};
+
+const CHAR_STATS = {
+  'c1': { nameJp:'京野なち',  job:'交渉人',    hp:3, str:7, def:3, spd:7, mp:2, luk:3, hasUnique:true,  uniqueName:'閃光刀華' },
+  'c2': { nameJp:'幻海ココ',  job:'奇術師',    hp:3, str:2, def:2, spd:6, mp:7, luk:5, hasUnique:true,  uniqueName:'蒼海繚乱' },
+  'c2b':{ nameJp:'幻海ココ',  job:'奇術師オルタ', hp:7, str:1, def:1, spd:6, mp:9, luk:7, hasUnique:true, uniqueName:'蒼海繚乱' },
+  'c3': { nameJp:'幻海ココ',  job:'修道女',    hp:5, str:7, def:2, spd:1, mp:3, luk:7, hasUnique:true,  uniqueName:'むきむきマッスル' },
+  'c3b':{ nameJp:'幻海ココ',  job:'修道女オルタ', hp:9, str:8, def:9, spd:1, mp:1, luk:3, hasUnique:false, uniqueName:'' },
+  'c4': { nameJp:'幻海ココ',  job:'国家公務員', hp:3, str:3, def:4, spd:7, mp:4, luk:4, hasUnique:true,  uniqueName:'深星煌' },
+  'c5': { nameJp:'幻海ココ',  job:'ホスト',    hp:5, str:5, def:2, spd:3, mp:7, luk:3, hasUnique:true,  uniqueName:'シャンパンコールだ！！！' },
+};
+
+function makeFighter(charData, statsData) {
+  return {
+    char: charData,
+    stats: {...statsData},
+    logName: charData.isBoss ? statsData.job : (charData.jp ? charData.jp.slice(-4) : statsData.nameJp),
+    maxHp: statsData.hp * HP_MULTIPLIER,
+    currentHp: statsData.hp * HP_MULTIPLIER,
+    lastAction: null,
+    chargeBonus: false,
+    stunned: false,
+    debuffStat: null,
+    uniqueCooldown: false,  // ユニーク使用後のクールダウン
+    selectedAction: null,
+    selectedMagicType: null,
+  };
+}
+
+const battle = { p1:null, p2:null, turn:1, phase:'idle' };
+
+/* ── Magic options by MP ── */
+function getMagicOptions(fighter) {
+  const mp = fighter.stats.mp;
+  const opts = [{ type:'normal', name:'ノーマル', desc:'高威力・効果なし' }];
+  if (mp >= 4) {
+    opts.push({ type:'stun',   name:'スタン',   desc:'威力やや低＋次ターン行動不能' });
+    opts.push({ type:'debuff', name:'デバフ',   desc:'威力やや低＋STR/DEF低下' });
+  }
+  if (mp >= 7 && fighter.stats.hasUnique) {
+    if (battle.turn >= 2 && !fighter.uniqueCooldown) {
+      opts.push({ type:'unique', name: fighter.stats.uniqueName, desc:'固有技・DEF無視大ダメージ', ready: true });
+    } else {
+      const desc = fighter.uniqueCooldown
+        ? '再使用には別の行動が必要'
+        : '2ターン目から使用可能';
+      opts.push({ type:'unique', name: fighter.stats.uniqueName, desc, ready: false });
+    }
+  }
+  return opts;
+}
+
+/* ── Stat helpers ── */
+function eStat(f, key) {
+  let v = f.stats[key];
+  if (f.debuffStat && f.debuffStat.stat === key) v = Math.max(1, v - 1);
+  return v;
+}
+function roll(pct) { return Math.random() * 100 < pct; }
+
+/* ── LUK軽減判定（被ダメ半減） ── */
+function luckyReduce(def, dmg, msgs) {
+  if (roll(eStat(def,'luk') * LUCKY_REDUCE_MULT)) {
+    const reduced = Math.floor(dmg / 2);
+    msgs.push(`✨ ${def.logName}はLUKで被ダメを半減！（${dmg}→${reduced}）`);
+    return reduced;
+  }
+  return dmg;
+}
+
+/* ── ダメージ計算 ── */
+function calcAtkDmg(att, def) {
+  let dmg = Math.max(5, eStat(att,'str') * 10 - eStat(def,'def') * 2);
+  if (att.chargeBonus) dmg *= 2;
+  const crit = battle.turn > 1 && roll(eStat(att,'luk') * CRIT_RATE_MULT);
+  if (crit) dmg = Math.floor(dmg * CRIT_MAGNIFY);
+  return { dmg, crit };
+}
+function calcMagDmg(att, def, mtype) {
+  let dmg = Math.max(5, eStat(att,'mp') * 8 - eStat(def,'def') * 2);
+  if (mtype === 'stun' || mtype === 'debuff') dmg = Math.floor(dmg * MAG_EFFECT_MULT);
+  if (mtype === 'unique') dmg = eStat(att,'mp') * 12;
+  if (att.chargeBonus) dmg *= 2;
+  const crit = battle.turn > 1 && roll(eStat(att,'luk') * CRIT_RATE_MULT);
+  if (crit) dmg = Math.floor(dmg * CRIT_MAGNIFY);
+  return { dmg, crit };
+}
+function calcBarrierDmg(att) {
+  const power = Math.max(eStat(att,'str'), eStat(att,'mp'));
+  let dmg = Math.max(5, Math.floor(power * 10 * BARRIER_DMG_MULT));
+  if (att.chargeBonus) dmg *= 2;
+  return dmg;
+}
+function dodge(att, def) {
+  return roll(eStat(def,'spd') * DODGE_SPD_MULT + eStat(def,'luk') * DODGE_LUK_MULT);
+}
+
+/* ── 回避演出 ── */
+function showEvade(isP1) {
+  const wrap  = $(`b-char-${isP1 ? 'p1' : 'p2'}`);
+  const popup = $('evade-popup');
+  if (wrap) {
+    wrap.classList.remove('evade');
+    void wrap.offsetWidth;
+    wrap.classList.add('evade');
+    setTimeout(() => wrap.classList.remove('evade'), T.EVADE_ANIM);
+  }
+  if (popup) {
+    popup.style.left = isP1 ? '18%' : '60%';
+    popup.style.top  = '40%';
+    popup.textContent = '回避!!';
+    popup.classList.remove('show');
+    void popup.offsetWidth;
+    popup.classList.add('show');
+    setTimeout(() => popup.classList.remove('show'), 1800);
+  }
+}
+
+/* ── ヒット演出（揺れ＋フラッシュ）── */
+function showHit(isP1) {
+  const wrap = $(`b-char-${isP1 ? 'p1' : 'p2'}`);
+  if (!wrap) return;
+  wrap.classList.remove('hit');
+  void wrap.offsetWidth;
+  wrap.classList.add('hit');
+  setTimeout(() => wrap.classList.remove('hit'), 350);
+}
+
+/* ── SPD先攻判定 ── */
+function getSpdFirst(a, b) {
+  const sa = eStat(a,'spd'), sb = eStat(b,'spd');
+  if (sa > sb) return [a, b];
+  if (sb > sa) return [b, a];
+  // 同値: LUKの比率でランダム
+  const la = eStat(a,'luk'), lb = eStat(b,'luk');
+  return Math.random() * (la + lb) < la ? [a, b] : [b, a];
+}
+
+/* ── 三すくみ勝敗判定（カットイン用） ── */
+function getMatchupWinner(p1a, p2a) {
+  if (p1a === 'stunned') return 'p2';
+  if (p2a === 'stunned') return 'p1';
+  if (p1a === 'charge' && p2a === 'charge') return 'both';
+  if (p1a === 'charge') return 'p2';
+  if (p2a === 'charge') return 'p1';
+  if (p1a === p2a) return 'both';
+  const beats = { attack:'barrier', barrier:'magic', magic:'attack' };
+  if (beats[p1a] === p2a) return 'p1';
+  if (beats[p2a] === p1a) return 'p2';
+  return 'both';
+}
+
+/* ── Apply magic effect ── */
+function applyEffect(target, mtype, msgs) {
+  const resist = roll(eStat(target,'luk') * RESIST_LUK_MULT);
+  if (mtype === 'stun') {
+    if (resist) msgs.push(`${target.logName}はスタンに抵抗した！`);
+    else { target.stunned = true; msgs.push(`${target.logName}がスタン状態に！`); }
+  } else if (mtype === 'debuff') {
+    if (resist) msgs.push(`${target.logName}はデバフに抵抗した！`);
+    else {
+      // STR/DEFのみ（攻防に直結するステータスに絞る）
+      const stats = ['str', 'def'];
+      const stat = stats[Math.floor(Math.random() * stats.length)];
+      const nm = {str:'STR', def:'DEF'};
+      target.debuffStat = { stat, turns:1 };
+      msgs.push(`${target.logName}の${nm[stat]}が低下！（1ターン）`);
+    }
+  } else if (mtype === 'unique') {
+    msgs.push(`✨ ${target.logName}に固有技がヒット！`);
+  }
+}
+
+/* ── チャージ処理（食いしばりはここのみ） ── */
+function processCharge(charger, opp, oppAction, oppMtype, msgs) {
+  const chargerIsP1 = charger === battle.p1;
+  msgs.push(`${charger.logName}はチャージ！`);
+  if (oppAction === 'attack') {
+    const r = calcAtkDmg(opp, charger);
+    const dmg = luckyReduce(charger, r.dmg, msgs);
+    charger.currentHp -= dmg;
+    msgs.push(`${opp.logName}のアタックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    showHit(chargerIsP1);
+  } else if (oppAction === 'barrier') {
+    const d = calcBarrierDmg(opp);
+    const dmg = luckyReduce(charger, d, msgs);
+    charger.currentHp -= dmg;
+    msgs.push(`${opp.logName}のバリア攻撃が直撃！${d}ダメージ`);
+    showHit(chargerIsP1);
+  } else if (oppAction === 'magic') {
+    const r = calcMagDmg(opp, charger, oppMtype);
+    const dmg = luckyReduce(charger, r.dmg, msgs);
+    charger.currentHp -= dmg;
+    msgs.push(`${opp.logName}のマジックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    showHit(chargerIsP1);
+    if (oppMtype !== 'normal') applyEffect(charger, oppMtype, msgs);
+  }
+  const rec = charger.stats.hp * CHARGE_RECOVER;
+  charger.currentHp += rec;
+  charger.currentHp = Math.min(charger.maxHp, charger.currentHp);
+  msgs.push(`チャージ回復：HP+${rec}`);
+  // 食いしばり：チャージ中のみ
+  if (charger.currentHp <= 0) {
+    const rate = eStat(charger,'luk') * SURVIVE_LUK_MULT + SURVIVE_BASE;
+    if (roll(rate)) {
+      charger.currentHp = 1;
+      charger.chargeBonus = true;
+      msgs.push(`⚡ ${charger.logName}は食いしばった！（HP1）`);
+    } else {
+      msgs.push(`${charger.logName}はチャージ中に倒れた...`);
+    }
+  } else {
+    charger.chargeBonus = true;
+  }
+}
+
+/* ── メインマッチアップ（SPD先攻対応） ── */
+function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
+
+  // SPD先攻でfirstを返す内部関数（引数はどちらが"攻め手"か）
+  function atkHit(att, def, label) {
+    if (dodge(att, def)) {
+      showEvade(def === p1);
+      msgs.push(`★EVADE★ ${def.logName}は${label}を回避！`); return 0;
+    }
+    const r = calcAtkDmg(att, def);
+    const dmg = luckyReduce(def, r.dmg, msgs);
+    def.currentHp = Math.max(0, def.currentHp - dmg);
+    msgs.push(`${att.logName}の${label}：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    showHit(def === p1);
+    return dmg;
+  }
+  function magHit(att, mtype, def) {
+    if (dodge(att, def)) {
+      showEvade(def === p1);
+      msgs.push(`★EVADE★ ${def.logName}はマジックを回避！`); return false;
+    }
+    const r = calcMagDmg(att, def, mtype);
+    const dmg = luckyReduce(def, r.dmg, msgs);
+    def.currentHp = Math.max(0, def.currentHp - dmg);
+    msgs.push(`${att.logName}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+    showHit(def === p1);
+    return true;
+  }
+  function barHit(att, def) {
+    if (dodge(att, def)) {
+      showEvade(def === p1);
+      msgs.push(`★EVADE★ ${def.logName}はバリア攻撃を回避！`); return;
+    }
+    const d = calcBarrierDmg(att);
+    const dmg = luckyReduce(def, d, msgs);
+    def.currentHp = Math.max(0, def.currentHp - dmg);
+    msgs.push(`${att.logName}のバリア攻撃：${d}ダメージ`);
+    showHit(def === p1);
+  }
+
+  const key = p1a + '_' + p2a;
+  switch(key) {
+    // ── アタック vs アタック（SPD先攻：先に倒したら反撃なし）
+    case 'attack_attack': {
+      msgs.push('アタック vs アタック！');
+      const [first, second] = getSpdFirst(p1, p2);
+      const r1 = calcAtkDmg(first, second);
+      const d1 = luckyReduce(second, r1.dmg, msgs);
+      second.currentHp = Math.max(0, second.currentHp - d1);
+      msgs.push(`${first.logName}（先攻）のアタック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
+      showHit(second === p1);
+      if (second.currentHp > 0) {
+        const r2 = calcAtkDmg(second, first);
+        const d2 = luckyReduce(first, r2.dmg, msgs);
+        first.currentHp = Math.max(0, first.currentHp - d2);
+        msgs.push(`${second.logName}（後攻）のアタック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
+        showHit(first === p1);
+      } else {
+        msgs.push(`${second.logName}は反撃できなかった...`);
+      }
+      break;
+    }
+    case 'attack_barrier':
+      msgs.push(`${p1.logName}のアタックがバリアを突き破る！`);
+      atkHit(p1, p2, 'アタック'); break;
+    case 'attack_magic':
+      msgs.push(`${p2.logName}のマジックがアタックを上回る！`);
+      { const hit = magHit(p2, p2m, p1); if (hit && p2m !== 'normal') applyEffect(p1, p2m, msgs); } break;
+    case 'attack_charge':
+      processCharge(p2, p1, 'attack', null, msgs); break;
+    // ── バリア
+    case 'barrier_attack':
+      msgs.push(`${p2.logName}のアタックがバリアを突き破る！`);
+      atkHit(p2, p1, 'アタック'); break;
+    case 'barrier_barrier': {
+      msgs.push('バリア vs バリア！なぜかダメージが発生する...');
+      const [first, second] = getSpdFirst(p1, p2);
+      const d1 = luckyReduce(second, calcBarrierDmg(first), msgs);
+      second.currentHp = Math.max(0, second.currentHp - d1);
+      msgs.push(`${first.logName}（先攻）のバリア攻撃：${d1}ダメージ`);
+      showHit(second === p1);
+      if (second.currentHp > 0) {
+        const d2 = luckyReduce(first, calcBarrierDmg(second), msgs);
+        first.currentHp = Math.max(0, first.currentHp - d2);
+        msgs.push(`${second.logName}（後攻）のバリア攻撃：${d2}ダメージ`);
+        showHit(first === p1);
+      } else {
+        msgs.push(`${second.logName}は反撃できなかった...`);
+      }
+      break;
+    }
+    case 'barrier_magic': {
+      msgs.push(`${p1.logName}のバリアがマジックを反射！`);
+      const r = calcMagDmg(p2, p1, p2m);
+      const dmg = luckyReduce(p2, r.dmg, msgs);
+      p2.currentHp = Math.max(0, p2.currentHp - dmg);
+      msgs.push(`反射ダメージ：${r.dmg}`);
+      showHit(false);
+      if (p2.currentHp > 0 && p2m !== 'normal' && p2m !== 'unique') {
+        if (eStat(p2,'mp') - eStat(p1,'def') >= 2) {
+          msgs.push('特殊効果も跳ね返った！');
+          applyEffect(p2, p2m, msgs);
+        }
+      }
+      break;
+    }
+    case 'barrier_charge':
+      processCharge(p2, p1, 'barrier', null, msgs); break;
+    // ── マジック
+    case 'magic_attack':
+      msgs.push(`${p1.logName}のマジックがアタックを上回る！`);
+      { const hit = magHit(p1, p1m, p2); if (hit && p1m !== 'normal') applyEffect(p2, p1m, msgs); } break;
+    case 'magic_barrier': {
+      msgs.push(`${p2.logName}のバリアがマジックを反射！`);
+      const r = calcMagDmg(p1, p2, p1m);
+      const dmg = luckyReduce(p1, r.dmg, msgs);
+      p1.currentHp = Math.max(0, p1.currentHp - dmg);
+      msgs.push(`反射ダメージ：${r.dmg}`);
+      showHit(true);
+      if (p1.currentHp > 0 && p1m !== 'normal' && p1m !== 'unique') {
+        if (eStat(p1,'mp') - eStat(p2,'def') >= 2) {
+          msgs.push('特殊効果も跳ね返った！');
+          applyEffect(p1, p1m, msgs);
+        }
+      }
+      break;
+    }
+    case 'magic_magic': {
+      msgs.push('マジック vs マジック！');
+      const [first, second] = getSpdFirst(p1, p2);
+      const fm = first === p1 ? p1m : p2m;
+      const sm = first === p1 ? p2m : p1m;
+      const r1 = calcMagDmg(first, second, fm);
+      const d1 = luckyReduce(second, r1.dmg, msgs);
+      second.currentHp = Math.max(0, second.currentHp - d1);
+      msgs.push(`${first.logName}（先攻）のマジック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
+      showHit(second === p1);
+      if (fm !== 'normal') applyEffect(second, fm, msgs);
+      if (second.currentHp > 0) {
+        const r2 = calcMagDmg(second, first, sm);
+        const d2 = luckyReduce(first, r2.dmg, msgs);
+        first.currentHp = Math.max(0, first.currentHp - d2);
+        msgs.push(`${second.logName}（後攻）のマジック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
+        showHit(first === p1);
+        if (sm !== 'normal') applyEffect(first, sm, msgs);
+      } else {
+        msgs.push(`${second.logName}は反撃できなかった...`);
+      }
+      break;
+    }
+    case 'magic_charge':
+      processCharge(p2, p1, 'magic', p1m, msgs); break;
+    // ── チャージ
+    case 'charge_attack':
+      processCharge(p1, p2, 'attack', null, msgs); break;
+    case 'charge_barrier':
+      processCharge(p1, p2, 'barrier', null, msgs); break;
+    case 'charge_magic':
+      processCharge(p1, p2, 'magic', p2m, msgs); break;
+    case 'charge_charge':
+      msgs.push('お互いチャージ！');
+      { const r1=p1.stats.hp*CHARGE_RECOVER; p1.currentHp=Math.min(p1.maxHp,p1.currentHp+r1); p1.chargeBonus=true; msgs.push(`${p1.logName}：HP+${r1}`); }
+      { const r2=p2.stats.hp*CHARGE_RECOVER; p2.currentHp=Math.min(p2.maxHp,p2.currentHp+r2); p2.chargeBonus=true; msgs.push(`${p2.logName}：HP+${r2}`); } break;
+  }
+}
+
+/* ── ターン確定・カットイン → 解決 ── */
+function confirmTurn() {
+  if (battle.phase !== 'select') return;
+  if (!battle.p1.selectedAction) return;
+  battle.phase = 'resolve';
+
+  // p2がスタン中はAI行動なし
+  if (battle.p2.stunned) {
+    battle.p2.selectedAction = 'stunned';
+    battle.p2.selectedMagicType = null;
+  } else {
+    const ai = getAIAction(battle.p2, battle.p1);
+    battle.p2.selectedAction = ai.action;
+    battle.p2.selectedMagicType = ai.magicType;
+  }
+
+  const p1a = battle.p1.selectedAction;
+  const p1m = battle.p1.selectedMagicType || 'normal';
+  const p2a = battle.p2.selectedAction;
+  const p2m = battle.p2.selectedMagicType || 'normal';
+
+  $('enemy-action-reveal').textContent = getActName(p2a, p2m);
+
+  // p2スタン時は専用カットイン
+  if (p2a === 'stunned') {
+    showCutIn(getActName(p1a, p1m), '', '⚡ STUN', '', 'p1', () => resolveTurn());
+  } else {
+    const winner = getMatchupWinner(p1a, p2a);
+    showCutIn(getActName(p1a, p1m), '', getActName(p2a, p2m), '', winner, () => resolveTurn());
+  }
+}
+
+/* ── カットインアニメーション ── */
+function showCutIn(p1Label, p1Sub, p2Label, p2Sub, winner, onComplete) {
+  const band1 = $('cutin-band-p1');
+  const band2 = $('cutin-band-p2');
+  const n1 = $('cutin-p1-name');
+  const s1 = $('cutin-p1-sub');
+  const n2 = $('cutin-p2-name');
+  const s2 = $('cutin-p2-sub');
+
+  n1.textContent = p1Label; s1.textContent = p1Sub;
+  n2.textContent = p2Label; s2.textContent = p2Sub;
+
+  // 初期位置に戻す
+  band1.style.transition = 'none'; band2.style.transition = 'none';
+  band1.style.transform = 'translateX(-110%)';
+  band2.style.transform = 'translateX(110%)';
+  band1.classList.remove('win'); band2.classList.remove('win');
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    // Phase1: 両方が中央へ
+    band1.style.transition = 'transform 0.38s cubic-bezier(0.16,1,0.3,1)';
+    band2.style.transition = 'transform 0.38s cubic-bezier(0.16,1,0.3,1)';
+    band1.style.transform = 'translateX(0%)';
+    band2.style.transform = 'translateX(0%)';
+
+    setTimeout(() => {
+      if (winner === 'p1') {
+        band1.classList.add('win');
+        band1.style.transition = 'transform 0.5s cubic-bezier(0.16,1,0.3,1)';
+        band1.style.transform = 'translateX(110%)';
+        band2.style.opacity = '0.3';
+      } else if (winner === 'p2') {
+        band2.classList.add('win');
+        band2.style.transition = 'transform 0.5s cubic-bezier(0.16,1,0.3,1)';
+        band2.style.transform = 'translateX(-110%)';
+        band1.style.opacity = '0.3';
+      }
+      setTimeout(() => {
+        band1.style.transition = 'none';
+        band2.style.transition = 'none';
+        band1.style.transform = 'translateX(-110%)';
+        band2.style.transform = 'translateX(110%)';
+        band1.style.opacity = '1';
+        band2.style.opacity = '1';
+        if (onComplete) onComplete();
+      }, T.CUTIN_RESET);
+    }, T.CUTIN_SLIDE);
+  }));
+}
+
+/* ── ターン解決 ── */
+function resolveTurn() {
+  const p1=battle.p1, p2=battle.p2;
+  const p1a=p1.selectedAction, p2a=p2.selectedAction;
+  const p1m=p1.selectedMagicType||'normal', p2m=p2.selectedMagicType||'normal';
+  const msgs = [`【TURN ${battle.turn}】 ${getActName(p1a,p1m)} vs ${getActName(p2a,p2m)}`];
+
+  if (p1a === 'stunned') {
+    msgs.push(`${p1.logName}はスタンで行動できない！`);
+    if (p2a === 'attack') {
+      const r = calcAtkDmg(p2, p1);
+      const dmg = luckyReduce(p1, r.dmg, msgs);
+      p1.currentHp = Math.max(0, p1.currentHp - dmg);
+      msgs.push(`${p2.logName}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(true);
+    } else if (p2a === 'magic') {
+      const r = calcMagDmg(p2, p1, p2m);
+      const dmg = luckyReduce(p1, r.dmg, msgs);
+      p1.currentHp = Math.max(0, p1.currentHp - dmg);
+      msgs.push(`${p2.logName}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(true);
+      if (p2m !== 'normal') applyEffect(p1, p2m, msgs);
+    } else if (p2a === 'barrier') {
+      msgs.push(`${p2.logName}はバリアを構えた`);
+    } else if (p2a === 'charge') {
+      const rec = p2.stats.hp * CHARGE_RECOVER;
+      p2.currentHp = Math.min(p2.maxHp, p2.currentHp + rec);
+      p2.chargeBonus = true;
+      msgs.push(`${p2.logName}はチャージ！HP+${rec}`);
+    }
+    p1.stunned = false;
+  } else if (p2a === 'stunned') {
+    msgs.push(`${p2.logName}はスタンで行動できない！`);
+    if (p1a === 'attack') {
+      const r = calcAtkDmg(p1, p2);
+      const dmg = luckyReduce(p2, r.dmg, msgs);
+      p2.currentHp = Math.max(0, p2.currentHp - dmg);
+      msgs.push(`${p1.logName}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(false);
+    } else if (p1a === 'magic') {
+      const r = calcMagDmg(p1, p2, p1m);
+      const dmg = luckyReduce(p2, r.dmg, msgs);
+      p2.currentHp = Math.max(0, p2.currentHp - dmg);
+      msgs.push(`${p1.logName}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
+      showHit(false);
+      if (p1m !== 'normal') applyEffect(p2, p1m, msgs);
+    } else if (p1a === 'barrier') {
+      msgs.push(`${p1.logName}はバリアを構えた`);
+    } else if (p1a === 'charge') {
+      const rec = p1.stats.hp * CHARGE_RECOVER;
+      p1.currentHp = Math.min(p1.maxHp, p1.currentHp + rec);
+      p1.chargeBonus = true;
+      msgs.push(`${p1.logName}はチャージ！HP+${rec}`);
+    }
+    p2.stunned = false;
+  } else {
+    processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs);
+  }
+  finalizeTurn(msgs);
+}
+
+/* ── ターン後処理 ── */
+function finalizeTurn(msgs) {
+  const p1=battle.p1, p2=battle.p2;
+  if (p1.debuffStat && --p1.debuffStat.turns <= 0) p1.debuffStat = null;
+  if (p2.debuffStat && --p2.debuffStat.turns <= 0) p2.debuffStat = null;
+  if (p1.selectedAction !== 'stunned') p1.lastAction = p1.selectedAction;
+  if (p2.selectedAction !== 'stunned') p2.lastAction = p2.selectedAction;
+  // スタン中でもchargeBonus は維持する（前ターンのチャージが無駄にならないよう）
+  if (p1.selectedAction !== 'charge' && p1.selectedAction !== 'stunned') p1.chargeBonus = false;
+  if (p2.selectedAction !== 'charge' && p2.selectedAction !== 'stunned') p2.chargeBonus = false;
+
+  // ユニーク使用後クールダウン管理
+  if (p1.selectedAction === 'magic' && p1.selectedMagicType === 'unique') p1.uniqueCooldown = true;
+  if (p2.selectedAction === 'magic' && p2.selectedMagicType === 'unique') p2.uniqueCooldown = true;
+  // アタック・バリア・ユニーク以外のマジック → クールダウン解除
+  const p1Resets = p1.selectedAction === 'attack' || p1.selectedAction === 'barrier' ||
+    (p1.selectedAction === 'magic' && p1.selectedMagicType !== 'unique');
+  const p2Resets = p2.selectedAction === 'attack' || p2.selectedAction === 'barrier' ||
+    (p2.selectedAction === 'magic' && p2.selectedMagicType !== 'unique');
+  if (p1Resets) p1.uniqueCooldown = false;
+  if (p2Resets) p2.uniqueCooldown = false;
+
+  battle.turn++;
+  // ログを蓄積（モーダル表示用）
+  if (battle.log) battle.log.push({ lines: msgs });
+  updateBattleHUD();
+  updateBattleHeader();
+  updateBattleLog(msgs.join('\n'));
+
+  // スタンターンはログを読む時間を長めに確保
+  const isStunTurn = p1.selectedAction === 'stunned' || p2.selectedAction === 'stunned';
+  const waitTime = isStunTurn ? T.STUN_RESULT : T.TURN_RESULT;
+  setTimeout(() => {
+    if (p1.currentHp <= 0 && p2.currentHp <= 0) { endBattle('draw'); }
+    else if (p1.currentHp <= 0) { endBattle('p2'); }
+    else if (p2.currentHp <= 0) { endBattle('p1'); }
+    else { battle.phase = 'select'; prepareTurn(); }
+  }, waitTime);
+}
+
+/* ── AI ── */
+function getAIAction(ai, opp) {
+  let avail = ['attack','barrier','magic','charge'];
+  if (ai.lastAction === 'charge') {
+    avail = avail.filter(a => a !== 'charge');
+  } else if (ai.lastAction) {
+    avail = avail.filter(a => a !== ai.lastAction);
+  }
+  const action = avail[Math.floor(Math.random() * avail.length)];
+  let magicType = 'normal';
+  if (action === 'magic') {
+    const opts = getMagicOptions(ai);
+    const pool = opts.filter(o => o.type !== 'unique' || o.ready);
+    magicType = pool.length > 0
+      ? pool[Math.floor(Math.random() * pool.length)].type
+      : 'normal';
+  }
+  return { action, magicType };
+}
+
+/* ── ヘルパー ── */
+function getActName(action, mtype) {
+  if (action === 'attack')  return 'アタック';
+  if (action === 'barrier') return 'バリア';
+  if (action === 'charge')  return 'チャージ';
+  if (action === 'stunned') return '行動不能';
+  if (action === 'magic') {
+    if (mtype === 'stun')   return 'スタンマジック';
+    if (mtype === 'debuff') return 'デバフマジック';
+    if (mtype === 'unique') return 'ユニークマジック';
+    return 'マジック';
+  }
+  return action;
+}
+
+/* ── ヘッダー更新（敵のグレーアウト） ── */
+function updateBattleHeader() {
+  const last = battle.p2 ? battle.p2.lastAction : null;
+  ['attack','barrier','magic','charge'].forEach(a => {
+    const el = $(`bh-p2-${a}`);
+    if (!el) return;
+    el.classList.toggle('blocked',
+      last === a || (last === 'charge' && a === 'charge'));
+  });
+}
+
+/* ── HUD更新 ── */
+function updateBattleHUD() {
+  const { p1, p2 } = battle;
+  if (!p1 || !p2) return;
+  const pct = (cur, max) => `${Math.max(0, cur / max * 100).toFixed(1)}%`;
+  $('enemy-hp-bar').style.width  = pct(p2.currentHp, p2.maxHp);
+  $('player-hp-bar').style.width = pct(p1.currentHp, p1.maxHp);
+  $('enemy-hp-text').textContent  = `${Math.max(0, p2.currentHp)}/${p2.maxHp}`;
+  $('player-hp-text').textContent = `${Math.max(0, p1.currentHp)}/${p1.maxHp}`;
+  updateStatInline('enemy-stat-inline',  p2);
+  updateStatInline('player-stat-inline', p1);
+  updateStatusBadges('enemy-status',  p2);
+  updateStatusBadges('player-status', p1);
+}
+
+function updateStatInline(elId, f) {
+  const el = $(elId);
+  if (!el) return;
+  const keys = ['str','def','spd','mp','luk'];
+  const lbl  = {str:'STR',def:'DEF',spd:'SPD',mp:'MP',luk:'LUK'};
+  el.innerHTML = keys.map(k => {
+    const isDebuffed = f.debuffStat && f.debuffStat.stat === k;
+    const val = eStat(f, k);
+    return `<span class="stat-chip${isDebuffed?' debuffed':''}"><span class="si">${lbl[k]}</span><span class="sv">${val}${isDebuffed?'↓':''}</span></span>`;
+  }).join('');
+}
+
+function updateStatusBadges(elId, f) {
+  const el = $(elId); el.innerHTML = '';
+  if (f.stunned)     el.innerHTML += '<span class="b-status-badge stun">STUN</span>';
+  if (f.chargeBonus) el.innerHTML += '<span class="b-status-badge charge">CHARGE×2</span>';
+  if (f.debuffStat) {
+    const nm = {str:'STR↓',def:'DEF↓',spd:'SPD↓',mp:'MP↓',luk:'LUK↓'};
+    el.innerHTML += `<span class="b-status-badge debuff">${nm[f.debuffStat.stat]||'DEBUFF'}</span>`;
+  }
+  // 1P（味方）のみ：状態異常なければ行を非表示
+  const bottom = el.closest('.b-hud-bottom');
+  if (bottom && elId === 'player-status') {
+    bottom.style.display = el.innerHTML ? 'flex' : 'none';
+  }
+}
+
+/* ── バトルログ ── */
+function updateBattleLog(text) {
+  const list = $('battle-log-list');
+  if (!list) return;
+  list.querySelectorAll('.b-log-entry').forEach(el => el.classList.add('old'));
+  const entry = document.createElement('div');
+  entry.className = 'b-log-entry';
+  if (text.includes('★EVADE★'))  entry.classList.add('evade');
+  else if (text.includes('【CRIT】')) entry.classList.add('crit');
+  entry.textContent = text;
+  list.appendChild(entry);
+  $('battle-log').scrollTop = 0;
+}
+function clearBattleLog() {
+  const list = $('battle-log-list');
+  if (list) list.innerHTML = '';
+}
+function scrollLog(dir) {
+  const log = $('battle-log');
+  if (log) log.scrollTop += dir * 28;
+}
+
+/* ── 中止ボタン ── */
+/* ── モーダル ── */
+function abortBattle()     { $('abort-modal').classList.add('show'); }
+function closeAbortModal() { $('abort-modal').classList.remove('show'); }
+function confirmAbort() {
+  closeAbortModal();
+  $('battle-result').classList.remove('show');
+  $('battle-screen').classList.remove('show');
+  clearBattleLog();
+  resetAll();
+}
+
+/* ── バトル開始 ── */
+function startBattle() {
+  const p1char = state.p1.char;
+  const p2char = state.p2.char;
+  const p1stats = CHAR_STATS[p1char.charId];
+  const p2stats = CHAR_STATS[p2char.charId];
+  if (!p1stats || !p2stats) { console.warn('Unknown charId', p1char.charId, p2char.charId); resetAll(); return; }
+
+  battle.p1 = makeFighter(p1char, p1stats);
+  battle.p2 = makeFighter(p2char, p2stats);
+  battle.turn = 1;
+  battle.phase = 'idle';
+  battle.log = [];
+
+  $('battle-screen').classList.add('show');
+  $('vs-screen').classList.remove('show');
+  ['vs-wrap-p1','vs-wrap-p2','vs-name-p1','vs-name-p2','vs-badge'].forEach(id =>
+    $(id).classList.remove('in','show')
+  );
+
+  renderBattleChars();
+
+  $('enemy-name-jp').textContent  = p2stats.nameJp;
+  $('enemy-name-job').textContent = p2stats.job;
+  $('player-name-jp').textContent  = p1stats.nameJp;
+  $('player-name-job').textContent = p1stats.job;
+
+  updateBattleHUD();
+  updateBattleHeader();
+  clearBattleLog();
+
+  setTimeout(() => {
+    $('blackout').classList.remove('on');
+    $('slash').classList.remove('on');
+  }, T.VS_BADGE);
+
+  updateBattleLog(`${battle.p1.logName} VS ${battle.p2.logName}\nバトル開始！`);
+  // ヘルプをバトル開始時に自動表示（次回以降表示しないが未設定の場合）
+  if (localStorage.getItem('liverbattle_skip_rule') !== '1') {
+    setTimeout(() => openRuleModal(), T.RULE_SHOW);
+  }
+  setTimeout(prepareTurn, T.BATTLE_START);
+}
+
+function renderBattleChars() {
+  const p1=battle.p1, p2=battle.p2;
+  function setChar(imgEl, cvEl, char) {
+    if (char.isBoss) {
+      // 専用bg → 失敗したらシルエット
+      imgEl.onload  = () => { imgEl.style.display='block'; cvEl.style.display='none'; };
+      imgEl.onerror = () => { imgEl.style.display='none'; cvEl.style.display='block'; drawSilhouette(cvEl, char.baseBg, char.color); };
+      imgEl.src = char.bg || '';
+      if (!char.bg) { imgEl.style.display='none'; cvEl.style.display='block'; drawSilhouette(cvEl, char.baseBg, char.color); }
+    } else {
+      imgEl.onerror = () => { imgEl.style.display='none'; cvEl.style.display='block'; drawPlaceholder(cvEl, char, false, true); };
+      if (char.bg) { imgEl.src=char.bg; imgEl.style.display='block'; cvEl.style.display='none'; }
+      else { imgEl.style.display='none'; cvEl.style.display='block'; drawPlaceholder(cvEl, char, false, true); }
+    }
+  }
+  setChar($('b-img-p1'), $('b-canvas-p1'), p1.char);
+  setChar($('b-img-p2'), $('b-canvas-p2'), p2.char);
+}
+
+/* ── ターン準備 ── */
+function prepareTurn() {
+  const p1=battle.p1, p2=battle.p2;
+  $('b-turn-num').textContent = `TURN ${battle.turn}`;
+  $('enemy-action-reveal').textContent = '';
+
+  // p1がスタン：プレイヤー行動不能
+  if (p1.stunned) {
+    $('battle-action-btns').style.display = 'none';
+    $('magic-menu').style.display = 'none';
+    $('battle-confirm-row').style.pointerEvents = 'none';
+    $('battle-confirm-row').style.opacity = '0.3';
+    battle.phase = 'resolve';
+    updateBattleLog(`${p1.logName}はスタンで行動できない！\n敵のターン...`);
+    showCutIn('⚡ STUN', '', '', '', 'p2', () => {
+      setTimeout(() => {
+        const ai = getAIAction(p2, p1);
+        p1.selectedAction = 'stunned'; p1.selectedMagicType = null;
+        p2.selectedAction = ai.action; p2.selectedMagicType = ai.magicType;
+        $('enemy-action-reveal').textContent = getActName(ai.action, ai.magicType);
+        setTimeout(resolveTurn, T.STUN_RESOLVE);
+      }, T.STUN_WAIT);
+    });
+    return;
+  }
+
+  // p2がスタン：敵行動不能・プレイヤーは自由に行動
+  if (p2.stunned) {
+    updateBattleLog(`${p2.logName}はスタンで行動できない！\nコマンドを選択してください`);
+    p2.selectedAction = 'stunned'; p2.selectedMagicType = null;
+    // コマンド選択は通常通り。confirm後にresolveTurnでp2.selectedAction='stunned'を処理
+  }
+
+  battle.phase = 'select';
+  updateCommandButtons();
+  if (!p2.stunned) {
+    updateBattleLog(`TURN ${battle.turn} — コマンドを選択して「戦闘開始」を押してください`);
+  }
+}
+
+/* ── コマンドボタン管理 ── */
+function updateCommandButtons() {
+  const p1 = battle.p1;
+  // スタン解除後にパネルを復元
+  $('battle-action-btns').style.display = 'grid';
+  $('battle-confirm-row').style.pointerEvents = '';
+  $('battle-confirm-row').style.opacity = '';
+
+  ['btn-atk','btn-bar','btn-mag','btn-chg'].forEach(id => {
+    const b = $(id);
+    b.classList.remove('selected','forbidden');
+    b.disabled = false;
+  });
+  const last = p1.lastAction;
+  if (last === 'charge') {
+    $('btn-chg').classList.add('forbidden');
+  } else if (last) {
+    const m = {attack:'btn-atk', barrier:'btn-bar', magic:'btn-mag', charge:'btn-chg'};
+    if (m[last]) $(m[last]).classList.add('forbidden');
+  }
+  p1.selectedAction = null;
+  p1.selectedMagicType = null;
+  $('btn-confirm-turn').disabled = true;
+  const disp = $('selected-action-display');
+  disp.textContent = 'コマンド選択...';
+  disp.classList.remove('has-action');
+  $('magic-menu').style.display = 'none';
+  $('battle-action-btns').style.display = 'grid';
+}
+
+/* ── プレイヤーアクション選択 ── */
+const CMD_DESC = {
+  attack:  '⚔️ バリアを突き破る。マジックには負ける。',
+  barrier: '🛡️ マジックを反射。アタックには負ける。',
+  magic:   '✨ アタックを上回る。バリアには弱い。',
+  charge:  '⚡ HP回復＋次ターン攻撃2倍。必ず被弾する。',
+};
+
+function selectAction(action) {
+  if (battle.phase !== 'select') return;
+  battle.p1.selectedAction = action;
+  battle.p1.selectedMagicType = null;
+  ['btn-atk','btn-bar','btn-mag','btn-chg'].forEach(id => $(id).classList.remove('selected'));
+  const m = {attack:'btn-atk', barrier:'btn-bar', charge:'btn-chg'};
+  if (m[action]) $(m[action]).classList.add('selected');
+  const names = {attack:'⚔️ アタック', barrier:'🛡️ バリア', charge:'⚡ チャージ'};
+  const disp = $('selected-action-display');
+  disp.textContent = `${names[action]}  —  ${CMD_DESC[action]}`;
+  disp.classList.add('has-action');
+  $('btn-confirm-turn').disabled = false;
+  SE.select();
+}
+
+function openMagicMenu() {
+  if (battle.phase !== 'select') return;
+  ['btn-atk','btn-bar','btn-mag','btn-chg'].forEach(id => $(id).classList.remove('selected'));
+  $('btn-mag').classList.add('selected');
+  const opts = getMagicOptions(battle.p1);
+  const c = $('magic-options');
+  c.innerHTML = '';
+  opts.forEach(opt => {
+    const b = document.createElement('button');
+    if (opt.type === 'unique' && !opt.ready) {
+      // MPチャージ中 or クールダウン中 → 無効ボタン表示
+      b.className = 'b-magic-btn unique charging';
+      b.innerHTML = `<span class="b-mag-name">MPチャージ中</span><span class="b-mag-desc">${opt.desc}</span>`;
+      b.disabled = true;
+    } else {
+      b.className = `b-magic-btn ${opt.type}`;
+      b.innerHTML = `<span class="b-mag-name">${opt.name}</span><span class="b-mag-desc">${opt.desc}</span>`;
+      b.onclick = () => selectMagic(opt.type, opt.name);
+    }
+    c.appendChild(b);
+  });
+  $('battle-action-btns').style.display = 'none';
+  $('magic-menu').style.display = 'block';
+}
+
+function closeMagicMenu() {
+  $('magic-menu').style.display = 'none';
+  $('battle-action-btns').style.display = 'grid';
+}
+
+function selectMagic(type, name) {
+  battle.p1.selectedAction = 'magic';
+  battle.p1.selectedMagicType = type;
+  const disp = $('selected-action-display');
+  disp.textContent = `✨ ${name}  —  ${CMD_DESC.magic}`; disp.classList.add('has-action');
+  $('btn-confirm-turn').disabled = false;
+  SE.select();
+  closeMagicMenu();
+}
+
+/* ── ルールモーダル ── */
+function openRuleModal() {
+  $('rule-modal').classList.add('show');
+  // チェックボックスの状態を反映
+  const skip = localStorage.getItem('liverbattle_skip_rule') === '1';
+  $('rule-skip-check').checked = skip;
+}
+function closeRuleModal() { $('rule-modal').classList.remove('show'); }
+function onRuleSkipChange() {
+  localStorage.setItem('liverbattle_skip_rule', $('rule-skip-check').checked ? '1' : '0');
+}
+
+/* ── バトル終了 ── */
+function endBattle(winner) {
+  battle.phase = 'end';
+  const titleEl = $('battle-result-title');
+  const subEl   = $('battle-result-sub');
+  if (winner === 'draw') {
+    titleEl.textContent = 'DRAW'; titleEl.style.color = '#888';
+    subEl.textContent = '引き分け';
+  } else if (winner === 'p1') {
+    titleEl.textContent = 'WIN!'; titleEl.style.color = 'var(--p1c)';
+    subEl.textContent = `${battle.p1.stats.nameJp}の勝利！`;
+  } else {
+    titleEl.textContent = 'LOSE'; titleEl.style.color = 'var(--p2c)';
+    subEl.textContent = `${battle.p2.stats.nameJp}の勝利！`;
+  }
+
+  // 勝者キャラの背景画像を薄く表示
+  const bgEl = $('battle-result-bg');
+  bgEl.classList.remove('show');
+  bgEl.style.backgroundImage = '';
+  const winChar = winner === 'p1' ? battle.p1.char : winner === 'p2' ? battle.p2.char : null;
+  if (winChar && winChar.bg) {
+    bgEl.style.backgroundImage = `url('${winChar.bg}')`;
+    setTimeout(() => bgEl.classList.add('show'), 50);
+  }
+
+  // SE
+  if (winner === 'p1') SE.win();
+  else if (winner === 'p2') SE.lose();
+
+  updateBattleLog(subEl.textContent);
+  $('battle-result').classList.add('show');
+}
+
+/* ── バトルログモーダル ── */
+function openLogModal() {
+  const body = $('log-modal-body');
+  body.innerHTML = '';
+  // battle.logに蓄積されたターンログを表示
+  (battle.log || []).forEach(entry => {
+    const block = document.createElement('div');
+    block.className = 'log-turn-block';
+    entry.lines.forEach((line, i) => {
+      const div = document.createElement('div');
+      if (i === 0) {
+        div.className = 'log-turn-header';
+      } else {
+        div.className = 'log-turn-line';
+        if (line.includes('★EVADE★')) div.classList.add('evade');
+        else if (line.includes('【CRIT】')) div.classList.add('crit');
+      }
+      div.textContent = line;
+      block.appendChild(div);
+    });
+    body.appendChild(block);
+  });
+  $('log-modal').classList.add('show');
+}
+function closeLogModal() { $('log-modal').classList.remove('show'); }
+
+function returnToSelect() {
+  $('battle-result').classList.remove('show');
+  $('battle-result-bg').classList.remove('show');
+  $('log-modal').classList.remove('show');
+  $('battle-screen').classList.remove('show');
+  clearBattleLog();
+  resetAll();
+}
+
+
+</script>
+</body>
+</html>

@@ -837,6 +837,8 @@ body::after {
 .b-magic-btn.stun    { border-color:#d6303055; }
 .b-magic-btn.debuff  { border-color:#7b2fd655; }
 .b-magic-btn.unique  { border-color:var(--gold)77; }
+.b-magic-btn.unique.disabled,
+.b-magic-btn.unique.charging { border-color:#333; opacity:0.4; cursor:not-allowed; }
 .b-mag-name { font-family:'Noto Sans JP',sans-serif; font-size:10px; font-weight:900; letter-spacing:1px; }
 .b-mag-desc { font-family:'Noto Sans JP',sans-serif; font-size:8px; color:var(--gray); letter-spacing:0.5px; }
 .b-back-btn {
@@ -1332,7 +1334,11 @@ body::after {
           <div class="rule-sec-title">マジックの種類（MP依存）</div>
           <div class="rule-row-sm">MP1〜3：ノーマル（高威力）のみ</div>
           <div class="rule-row-sm">MP4〜6：スタン（次ターン行動不能）・デバフ（ステ低下）</div>
-          <div class="rule-row-sm">MP7＋：チャージ後のターンにユニークマジック（DEF無視大ダメージ）が使用可能。使用後は一度別の行動が必要。</div>
+          <div class="rule-row-sm">MP7以上：固有技（ユニークマジック）が発動可能。</div>
+        </div>
+        <div class="rule-section">
+          <div class="rule-sec-title">固有技（ユニークマジック）</div>
+          <div class="rule-text">DEF値によるダメージ軽減を無視できるため大ダメージとなる。ただし発動までには1ターン以上のMPチャージが必要であり、発動後も再使用には一度別の行動が必要。準備中は「MPチャージ中」と表示される。</div>
         </div>
         <div class="rule-section">
           <div class="rule-sec-title">回避 / クリティカル</div>
@@ -2379,8 +2385,15 @@ function getMagicOptions(fighter) {
     opts.push({ type:'stun',   name:'スタン',   desc:'威力やや低＋次ターン行動不能' });
     opts.push({ type:'debuff', name:'デバフ',   desc:'威力やや低＋STR/DEF低下' });
   }
-  if (mp >= 7 && fighter.stats.hasUnique && fighter.chargeBonus && !fighter.uniqueCooldown) {
-    opts.push({ type:'unique', name: fighter.stats.uniqueName, desc:'ユニークマジック・DEF無視（チャージ後のみ）' });
+  if (mp >= 7 && fighter.stats.hasUnique) {
+    if (battle.turn >= 2 && !fighter.uniqueCooldown) {
+      opts.push({ type:'unique', name: fighter.stats.uniqueName, desc:'固有技・DEF無視大ダメージ', ready: true });
+    } else {
+      const desc = fighter.uniqueCooldown
+        ? '再使用には別の行動が必要'
+        : '2ターン目から使用可能';
+      opts.push({ type:'unique', name: fighter.stats.uniqueName, desc, ready: false });
+    }
   }
   return opts;
 }
@@ -2910,10 +2923,10 @@ function getAIAction(ai, opp) {
   let magicType = 'normal';
   if (action === 'magic') {
     const opts = getMagicOptions(ai);
-    // uniqueCooldown中はユニーク除外
-    const filtered = opts.filter(o => !(o.type === 'unique' && ai.uniqueCooldown));
-    const pool = filtered.length > 0 ? filtered : opts.filter(o => o.type !== 'unique');
-    magicType = pool[Math.floor(Math.random() * pool.length)].type;
+    const pool = opts.filter(o => o.type !== 'unique' || o.ready);
+    magicType = pool.length > 0
+      ? pool[Math.floor(Math.random() * pool.length)].type
+      : 'normal';
   }
   return { action, magicType };
 }
@@ -3178,7 +3191,6 @@ function selectAction(action) {
 
 function openMagicMenu() {
   if (battle.phase !== 'select') return;
-  // マジックメニューを開いた時点で他のselectを解除
   ['btn-atk','btn-bar','btn-mag','btn-chg'].forEach(id => $(id).classList.remove('selected'));
   $('btn-mag').classList.add('selected');
   const opts = getMagicOptions(battle.p1);
@@ -3186,9 +3198,16 @@ function openMagicMenu() {
   c.innerHTML = '';
   opts.forEach(opt => {
     const b = document.createElement('button');
-    b.className = `b-magic-btn ${opt.type}`;
-    b.innerHTML = `<span class="b-mag-name">${opt.name}</span><span class="b-mag-desc">${opt.desc}</span>`;
-    b.onclick = () => selectMagic(opt.type, opt.name);
+    if (opt.type === 'unique' && !opt.ready) {
+      // MPチャージ中 or クールダウン中 → 無効ボタン表示
+      b.className = 'b-magic-btn unique charging';
+      b.innerHTML = `<span class="b-mag-name">MPチャージ中</span><span class="b-mag-desc">${opt.desc}</span>`;
+      b.disabled = true;
+    } else {
+      b.className = `b-magic-btn ${opt.type}`;
+      b.innerHTML = `<span class="b-mag-name">${opt.name}</span><span class="b-mag-desc">${opt.desc}</span>`;
+      b.onclick = () => selectMagic(opt.type, opt.name);
+    }
     c.appendChild(b);
   });
   $('battle-action-btns').style.display = 'none';

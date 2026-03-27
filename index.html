@@ -223,18 +223,10 @@ html, body {
 /* Left/right fade edges */
 #carousel-mask::before,
 #carousel-mask::after {
-  content:'';
-  position:absolute; top:0; bottom:0; width:56px;
-  z-index:2; pointer-events:none;
+  content:''; position:absolute; top:0; bottom:0; width:56px; z-index:2; pointer-events:none;
 }
-#carousel-mask::before {
-  left:0;
-  background:linear-gradient(90deg, var(--bg) 0%, transparent 100%);
-}
-#carousel-mask::after {
-  right:0;
-  background:linear-gradient(270deg, var(--bg) 0%, transparent 100%);
-}
+#carousel-mask::before { left:0;  background:linear-gradient(90deg,  var(--bg) 0%, transparent 100%); }
+#carousel-mask::after  { right:0; background:linear-gradient(270deg, var(--bg) 0%, transparent 100%); }
 
 #carousel-track {
   display:flex;
@@ -980,6 +972,45 @@ body::after {
 .rule-close-btn:hover { background:#1a1a2a; color:#fff; }
 
 
+/* バトルログモーダル */
+#log-modal {
+  position:absolute; inset:0; z-index:30;
+  background:rgba(0,0,0,0.92);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.25s;
+  padding:16px;
+}
+#log-modal.show { opacity:1; pointer-events:all; }
+#log-modal-inner {
+  width:100%; max-width:360px; max-height:80vh;
+  background:#08080f; border:1px solid #2a2a40; border-radius:6px;
+  display:flex; flex-direction:column;
+}
+#log-modal-title {
+  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:6px;
+  color:var(--gold); text-align:center;
+  padding:14px 16px 10px; border-bottom:1px solid #1a1a2a; flex-shrink:0;
+}
+#log-modal-body {
+  flex:1; overflow-y:auto; padding:10px 14px;
+  display:flex; flex-direction:column; gap:6px;
+  min-height:0;
+}
+#log-modal-body::-webkit-scrollbar { width:3px; }
+#log-modal-body::-webkit-scrollbar-track { background:transparent; }
+#log-modal-body::-webkit-scrollbar-thumb { background:#2a2a40; border-radius:2px; }
+.log-turn-block { display:flex; flex-direction:column; gap:2px; }
+.log-turn-header {
+  font-family:'Bebas Neue',sans-serif; font-size:10px; letter-spacing:3px;
+  color:var(--p1c); border-bottom:1px solid #1a1a2a; padding-bottom:2px; margin-top:4px;
+}
+.log-turn-line {
+  font-family:'Noto Sans JP',sans-serif; font-size:10px; font-weight:700;
+  color:#888; line-height:1.6; white-space:pre-line;
+}
+.log-turn-line.evade { color:#38d9f5; }
+.log-turn-line.crit  { color:var(--gold); }
+
 /* ── Cut-in overlay ── */
 #cutin-overlay {
   position:absolute; inset:0; z-index:18;
@@ -1046,17 +1077,14 @@ body::after {
   font-family:'Noto Sans JP',sans-serif; font-size:14px; font-weight:900;
   letter-spacing:3px; color:#fff; opacity:0.8;
 }
-#battle-result-stats {
-  display:flex; flex-direction:column; gap:4px; align-items:center;
-  font-family:'Bebas Neue',sans-serif; font-size:11px; letter-spacing:2px;
-  color:#666; margin-top:4px;
+#battle-result-log {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:5px;
+  color:#000; background:var(--gray); border:none; cursor:pointer;
+  padding:12px 28px;
+  clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);
+  transition:filter 0.12s, transform 0.08s;
 }
-.result-stat-row {
-  display:flex; gap:16px;
-}
-.result-stat-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
-.result-stat-label { font-size:9px; letter-spacing:2px; color:#444; }
-.result-stat-val   { font-size:14px; color:#aaa; }
+#battle-result-log:active { transform:scale(0.94); }
 #battle-result-back {
   font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:5px;
   color:#000; background:var(--gold); border:none; cursor:pointer;
@@ -1313,8 +1341,15 @@ body::after {
       <div id="battle-result-bg"></div>
       <div id="battle-result-title">RESULT</div>
       <div id="battle-result-sub"></div>
-      <div id="battle-result-stats"></div>
       <button id="battle-result-back" onclick="returnToSelect()">RETURN TO SELECT</button>
+      <button id="battle-result-log" onclick="openLogModal()">BATTLE LOG</button>
+    </div>
+    <div id="log-modal">
+      <div id="log-modal-inner">
+        <div id="log-modal-title">BATTLE LOG</div>
+        <div id="log-modal-body"></div>
+        <button class="rule-close-btn" onclick="closeLogModal()">× CLOSE</button>
+      </div>
     </div>
   </div><!-- /#battle-screen -->
 
@@ -1345,6 +1380,8 @@ async function loadChars() {
     if (!res.ok) throw new Error('fetch failed');
     const data = await res.json();
     CHARS = data.characters;
+    // ランダム枠はJSONに含めず、常にコードで末尾に追加
+    CHARS.push({ id:'rnd', charId:'rnd', jp:'ランダム', color:'#556677', colorLabel:'', face:'', bg:'', vs:'', card:'', isRandom:true });
     // chars.jsonのstatsからCHAR_STATSを上書き構築
     data.characters.forEach(ch => {
       if (ch.stats && ch.charId && ch.charId !== 'rnd') {
@@ -1562,23 +1599,30 @@ function showPreview(char) {
 
   // Art — bg画像（背景あり、cover表示）
   if (char.isRandom) {
-    // ランダム時はステータスタップ無効
     currentChar = null;
-    // ？を描画
     artMain.style.display='none';
     phMain.style.display='block';
     phMain.style.opacity='1';
     const ctx = phMain.getContext('2d');
     const W = phMain.width, H = phMain.height;
     ctx.clearRect(0,0,W,H);
+    // ？
     ctx.fillStyle = '#fff';
     ctx.globalAlpha = 0.12;
-    ctx.font = `bold ${W*.7}px Bebas Neue, monospace`;
+    ctx.font = `bold ${W*.6}px Bebas Neue, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('?', W/2, H/2);
+    ctx.fillText('?', W/2, H*.44);
+    // RANDOM
+    ctx.globalAlpha = 0.35;
+    ctx.font = `bold ${W*.1}px Bebas Neue, monospace`;
+    ctx.textBaseline = 'top';
+    ctx.letterSpacing = '4px';
+    ctx.fillText('RANDOM', W/2, H*.72);
     ctx.globalAlpha = 1;
     $('char-splash').style.opacity='0';
+    // 名前欄も非表示
+    nameEl.classList.remove('show');
     return;
   } else {
     artMain.onerror = () => {
@@ -1597,9 +1641,9 @@ function showPreview(char) {
     phMain.style.opacity='1';
   }
 
-  // Name
   setTimeout(() => {
-    nameJp.textContent = char.isRandom ? '？？？' : char.jp;
+    if (char.isRandom) return; // ランダムは名前欄を出さない
+    nameJp.textContent = char.jp;
     nameEl.classList.add('show');
     currentChar = char;
   }, 80);
@@ -1846,7 +1890,6 @@ function flash(big=false) {
 }
 
 /* ── Sound（無効化） ── */
-function playTick()    {}
 function playConfirm() {}
 
 /* ── SE（効果音）── Web Audio API対応スタブ
@@ -2145,7 +2188,8 @@ const $ = id => document.getElementById(id);
 const HP_MULTIPLIER    = 30;   // HPステ → 実HP
 const CHARGE_RECOVER   = 5;    // チャージ回復：HP × この値
 const CRIT_RATE_MULT   = 3;    // LUK × この値 = クリティカル率(%)
-const CRIT_MAGNIFY     = 1.2;  // クリティカル倍率
+const CRIT_MAGNIFY     = 1.4;  // クリティカル倍率
+const LUCKY_REDUCE_MULT= 4;    // LUK × この値(%) = 被ダメ半減発動率
 const DODGE_SPD_MULT   = 3;    // SPD × この値 = 回避率の一部(%)
 const DODGE_LUK_MULT   = 2;    // LUK × この値 = 回避率の一部(%)
 const RESIST_LUK_MULT  = 5;    // LUK × この値 = 抵抗率(%)
@@ -2226,11 +2270,21 @@ function eStat(f, key) {
 }
 function roll(pct) { return Math.random() * 100 < pct; }
 
+/* ── LUK軽減判定（被ダメ半減） ── */
+function luckyReduce(def, dmg, msgs) {
+  if (roll(eStat(def,'luk') * LUCKY_REDUCE_MULT)) {
+    const reduced = Math.floor(dmg / 2);
+    msgs.push(`✨ ${def.stats.nameJp}はLUKで被ダメを半減！（${dmg}→${reduced}）`);
+    return reduced;
+  }
+  return dmg;
+}
+
 /* ── ダメージ計算 ── */
 function calcAtkDmg(att, def) {
   let dmg = Math.max(5, eStat(att,'str') * 10 - eStat(def,'def') * 2);
   if (att.chargeBonus) dmg *= 2;
-  const crit = roll(eStat(att,'luk') * CRIT_RATE_MULT);
+  const crit = battle.turn > 1 && roll(eStat(att,'luk') * CRIT_RATE_MULT);
   if (crit) dmg = Math.floor(dmg * CRIT_MAGNIFY);
   return { dmg, crit };
 }
@@ -2239,12 +2293,13 @@ function calcMagDmg(att, def, mtype) {
   if (mtype === 'stun' || mtype === 'debuff') dmg = Math.floor(dmg * MAG_EFFECT_MULT);
   if (mtype === 'unique') dmg = eStat(att,'mp') * 12;
   if (att.chargeBonus) dmg *= 2;
-  const crit = roll(eStat(att,'luk') * CRIT_RATE_MULT);
+  const crit = battle.turn > 1 && roll(eStat(att,'luk') * CRIT_RATE_MULT);
   if (crit) dmg = Math.floor(dmg * CRIT_MAGNIFY);
   return { dmg, crit };
 }
 function calcBarrierDmg(att) {
-  let dmg = Math.max(5, Math.floor(eStat(att,'str') * 10 * BARRIER_DMG_MULT));
+  const power = Math.max(eStat(att,'str'), eStat(att,'mp'));
+  let dmg = Math.max(5, Math.floor(power * 10 * BARRIER_DMG_MULT));
   if (att.chargeBonus) dmg *= 2;
   return dmg;
 }
@@ -2334,17 +2389,20 @@ function processCharge(charger, opp, oppAction, oppMtype, msgs) {
   msgs.push(`${charger.stats.nameJp}はチャージ！`);
   if (oppAction === 'attack') {
     const r = calcAtkDmg(opp, charger);
-    charger.currentHp -= r.dmg;
+    const dmg = luckyReduce(charger, r.dmg, msgs);
+    charger.currentHp -= dmg;
     msgs.push(`${opp.stats.nameJp}のアタックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(chargerIsP1);
   } else if (oppAction === 'barrier') {
     const d = calcBarrierDmg(opp);
-    charger.currentHp -= d;
+    const dmg = luckyReduce(charger, d, msgs);
+    charger.currentHp -= dmg;
     msgs.push(`${opp.stats.nameJp}のバリア攻撃が直撃！${d}ダメージ`);
     showHit(chargerIsP1);
   } else if (oppAction === 'magic') {
     const r = calcMagDmg(opp, charger, oppMtype);
-    charger.currentHp -= r.dmg;
+    const dmg = luckyReduce(charger, r.dmg, msgs);
+    charger.currentHp -= dmg;
     msgs.push(`${opp.stats.nameJp}のマジックが直撃！${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(chargerIsP1);
     if (oppMtype !== 'normal') applyEffect(charger, oppMtype, msgs);
@@ -2378,10 +2436,11 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       msgs.push(`★EVADE★ ${def.stats.nameJp}は${label}を回避！`); return 0;
     }
     const r = calcAtkDmg(att, def);
-    def.currentHp = Math.max(0, def.currentHp - r.dmg);
+    const dmg = luckyReduce(def, r.dmg, msgs);
+    def.currentHp = Math.max(0, def.currentHp - dmg);
     msgs.push(`${att.stats.nameJp}の${label}：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(def === p1);
-    return r.dmg;
+    return dmg;
   }
   function magHit(att, mtype, def) {
     if (dodge(att, def)) {
@@ -2389,7 +2448,8 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       msgs.push(`★EVADE★ ${def.stats.nameJp}はマジックを回避！`); return false;
     }
     const r = calcMagDmg(att, def, mtype);
-    def.currentHp = Math.max(0, def.currentHp - r.dmg);
+    const dmg = luckyReduce(def, r.dmg, msgs);
+    def.currentHp = Math.max(0, def.currentHp - dmg);
     msgs.push(`${att.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
     showHit(def === p1);
     return true;
@@ -2400,7 +2460,8 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       msgs.push(`★EVADE★ ${def.stats.nameJp}はバリア攻撃を回避！`); return;
     }
     const d = calcBarrierDmg(att);
-    def.currentHp = Math.max(0, def.currentHp - d);
+    const dmg = luckyReduce(def, d, msgs);
+    def.currentHp = Math.max(0, def.currentHp - dmg);
     msgs.push(`${att.stats.nameJp}のバリア攻撃：${d}ダメージ`);
     showHit(def === p1);
   }
@@ -2412,12 +2473,14 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       msgs.push('アタック vs アタック！');
       const [first, second] = getSpdFirst(p1, p2);
       const r1 = calcAtkDmg(first, second);
-      second.currentHp = Math.max(0, second.currentHp - r1.dmg);
+      const d1 = luckyReduce(second, r1.dmg, msgs);
+      second.currentHp = Math.max(0, second.currentHp - d1);
       msgs.push(`${first.stats.nameJp}（先攻）のアタック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
       showHit(second === p1);
       if (second.currentHp > 0) {
         const r2 = calcAtkDmg(second, first);
-        first.currentHp = Math.max(0, first.currentHp - r2.dmg);
+        const d2 = luckyReduce(first, r2.dmg, msgs);
+        first.currentHp = Math.max(0, first.currentHp - d2);
         msgs.push(`${second.stats.nameJp}（後攻）のアタック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
         showHit(first === p1);
       } else {
@@ -2440,12 +2503,12 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
     case 'barrier_barrier': {
       msgs.push('バリア vs バリア！なぜかダメージが発生する...');
       const [first, second] = getSpdFirst(p1, p2);
-      const d1 = calcBarrierDmg(first);
+      const d1 = luckyReduce(second, calcBarrierDmg(first), msgs);
       second.currentHp = Math.max(0, second.currentHp - d1);
       msgs.push(`${first.stats.nameJp}（先攻）のバリア攻撃：${d1}ダメージ`);
       showHit(second === p1);
       if (second.currentHp > 0) {
-        const d2 = calcBarrierDmg(second);
+        const d2 = luckyReduce(first, calcBarrierDmg(second), msgs);
         first.currentHp = Math.max(0, first.currentHp - d2);
         msgs.push(`${second.stats.nameJp}（後攻）のバリア攻撃：${d2}ダメージ`);
         showHit(first === p1);
@@ -2457,7 +2520,8 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
     case 'barrier_magic': {
       msgs.push(`${p1.stats.nameJp}のバリアがマジックを反射！`);
       const r = calcMagDmg(p2, p1, p2m);
-      p2.currentHp = Math.max(0, p2.currentHp - r.dmg);
+      const dmg = luckyReduce(p2, r.dmg, msgs);
+      p2.currentHp = Math.max(0, p2.currentHp - dmg);
       msgs.push(`反射ダメージ：${r.dmg}`);
       showHit(false);
       if (p2.currentHp > 0 && p2m !== 'normal' && p2m !== 'unique') {
@@ -2477,7 +2541,8 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
     case 'magic_barrier': {
       msgs.push(`${p2.stats.nameJp}のバリアがマジックを反射！`);
       const r = calcMagDmg(p1, p2, p1m);
-      p1.currentHp = Math.max(0, p1.currentHp - r.dmg);
+      const dmg = luckyReduce(p1, r.dmg, msgs);
+      p1.currentHp = Math.max(0, p1.currentHp - dmg);
       msgs.push(`反射ダメージ：${r.dmg}`);
       showHit(true);
       if (p1.currentHp > 0 && p1m !== 'normal' && p1m !== 'unique') {
@@ -2494,13 +2559,15 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       const fm = first === p1 ? p1m : p2m;
       const sm = first === p1 ? p2m : p1m;
       const r1 = calcMagDmg(first, second, fm);
-      second.currentHp = Math.max(0, second.currentHp - r1.dmg);
+      const d1 = luckyReduce(second, r1.dmg, msgs);
+      second.currentHp = Math.max(0, second.currentHp - d1);
       msgs.push(`${first.stats.nameJp}（先攻）のマジック：${r1.dmg}ダメージ${r1.crit?' 【CRIT】':''}`);
       showHit(second === p1);
       if (fm !== 'normal') applyEffect(second, fm, msgs);
       if (second.currentHp > 0) {
         const r2 = calcMagDmg(second, first, sm);
-        first.currentHp = Math.max(0, first.currentHp - r2.dmg);
+        const d2 = luckyReduce(first, r2.dmg, msgs);
+        first.currentHp = Math.max(0, first.currentHp - d2);
         msgs.push(`${second.stats.nameJp}（後攻）のマジック：${r2.dmg}ダメージ${r2.crit?' 【CRIT】':''}`);
         showHit(first === p1);
         if (sm !== 'normal') applyEffect(first, sm, msgs);
@@ -2615,14 +2682,17 @@ function resolveTurn() {
   const msgs = [`【TURN ${battle.turn}】 ${getActName(p1a,p1m)} vs ${getActName(p2a,p2m)}`];
 
   if (p1a === 'stunned') {
-    // p1スタン：p2のみ行動
     msgs.push(`${p1.stats.nameJp}はスタンで行動できない！`);
     if (p2a === 'attack') {
-      const r = calcAtkDmg(p2, p1); p1.currentHp = Math.max(0, p1.currentHp - r.dmg);
+      const r = calcAtkDmg(p2, p1);
+      const dmg = luckyReduce(p1, r.dmg, msgs);
+      p1.currentHp = Math.max(0, p1.currentHp - dmg);
       msgs.push(`${p2.stats.nameJp}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(true);
     } else if (p2a === 'magic') {
-      const r = calcMagDmg(p2, p1, p2m); p1.currentHp = Math.max(0, p1.currentHp - r.dmg);
+      const r = calcMagDmg(p2, p1, p2m);
+      const dmg = luckyReduce(p1, r.dmg, msgs);
+      p1.currentHp = Math.max(0, p1.currentHp - dmg);
       msgs.push(`${p2.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(true);
       if (p2m !== 'normal') applyEffect(p1, p2m, msgs);
@@ -2636,14 +2706,17 @@ function resolveTurn() {
     }
     p1.stunned = false;
   } else if (p2a === 'stunned') {
-    // p2スタン：p1のみ行動
     msgs.push(`${p2.stats.nameJp}はスタンで行動できない！`);
     if (p1a === 'attack') {
-      const r = calcAtkDmg(p1, p2); p2.currentHp = Math.max(0, p2.currentHp - r.dmg);
+      const r = calcAtkDmg(p1, p2);
+      const dmg = luckyReduce(p2, r.dmg, msgs);
+      p2.currentHp = Math.max(0, p2.currentHp - dmg);
       msgs.push(`${p1.stats.nameJp}のアタック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(false);
     } else if (p1a === 'magic') {
-      const r = calcMagDmg(p1, p2, p1m); p2.currentHp = Math.max(0, p2.currentHp - r.dmg);
+      const r = calcMagDmg(p1, p2, p1m);
+      const dmg = luckyReduce(p2, r.dmg, msgs);
+      p2.currentHp = Math.max(0, p2.currentHp - dmg);
       msgs.push(`${p1.stats.nameJp}のマジック：${r.dmg}ダメージ${r.crit?' 【CRIT】':''}`);
       showHit(false);
       if (p1m !== 'normal') applyEffect(p2, p1m, msgs);
@@ -2674,6 +2747,8 @@ function finalizeTurn(msgs) {
   if (p2.selectedAction !== 'charge' && p2.selectedAction !== 'stunned') p2.chargeBonus = false;
 
   battle.turn++;
+  // ログを蓄積（モーダル表示用）
+  if (battle.log) battle.log.push({ lines: msgs });
   updateBattleHUD();
   updateBattleHeader();
   updateBattleLog(msgs.join('\n'));
@@ -2820,6 +2895,7 @@ function startBattle() {
   battle.p2 = makeFighter(p2char, p2stats);
   battle.turn = 1;
   battle.phase = 'idle';
+  battle.log = [];
 
   $('battle-screen').classList.add('show');
   $('vs-screen').classList.remove('show');
@@ -3032,9 +3108,36 @@ function endBattle(winner) {
   $('battle-result').classList.add('show');
 }
 
+/* ── バトルログモーダル ── */
+function openLogModal() {
+  const body = $('log-modal-body');
+  body.innerHTML = '';
+  // battle.logに蓄積されたターンログを表示
+  (battle.log || []).forEach(entry => {
+    const block = document.createElement('div');
+    block.className = 'log-turn-block';
+    entry.lines.forEach((line, i) => {
+      const div = document.createElement('div');
+      if (i === 0) {
+        div.className = 'log-turn-header';
+      } else {
+        div.className = 'log-turn-line';
+        if (line.includes('★EVADE★')) div.classList.add('evade');
+        else if (line.includes('【CRIT】')) div.classList.add('crit');
+      }
+      div.textContent = line;
+      block.appendChild(div);
+    });
+    body.appendChild(block);
+  });
+  $('log-modal').classList.add('show');
+}
+function closeLogModal() { $('log-modal').classList.remove('show'); }
+
 function returnToSelect() {
   $('battle-result').classList.remove('show');
   $('battle-result-bg').classList.remove('show');
+  $('log-modal').classList.remove('show');
   $('battle-screen').classList.remove('show');
   clearBattleLog();
   resetAll();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>LiverBattle</title>
+<title>LiverBattle v1.1</title>
   <!-- PWA / アイコン設定 -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/x-icon" href="icons/favicon.ico">
@@ -1085,7 +1085,7 @@ body::after {
   <!-- Header -->
   <div id="header">
     <div class="hdr-side left">
-      <div class="player-tag p1">1P</div>
+      <div class="player-tag p1">PLAYER</div>
       <div class="phase-lbl on" id="lbl1">SELECT</div>
     </div>
     <div class="hdr-center">
@@ -1093,7 +1093,7 @@ body::after {
       <div id="hdr-tap-hint">ダブルタップでステータス表示</div>
     </div>
     <div class="hdr-side right">
-      <div class="player-tag p2">2P</div>
+      <div class="player-tag p2">NPC</div>
       <div class="phase-lbl" id="lbl2">SELECT</div>
     </div>
   </div>
@@ -1345,10 +1345,17 @@ async function loadChars() {
     if (!res.ok) throw new Error('fetch failed');
     const data = await res.json();
     CHARS = data.characters;
-    console.log('chars.json 読み込み成功');
+    // chars.jsonのstatsからCHAR_STATSを上書き構築
+    data.characters.forEach(ch => {
+      if (ch.stats && ch.charId && ch.charId !== 'rnd') {
+        CHAR_STATS[ch.charId] = ch.stats;
+      }
+    });
+    console.log('chars.json 読み込み成功（キャラ数:', CHARS.length, '）');
   } catch(e) {
     console.warn('chars.json 読み込み失敗、インラインデータを使用:', e);
     CHARS = CHARS_DEFAULT;
+    // CHAR_STATSはコード内のものをそのまま使用
   }
 }
 
@@ -2666,22 +2673,6 @@ function finalizeTurn(msgs) {
   if (p1.selectedAction !== 'charge' && p1.selectedAction !== 'stunned') p1.chargeBonus = false;
   if (p2.selectedAction !== 'charge' && p2.selectedAction !== 'stunned') p2.chargeBonus = false;
 
-  // バトル統計を蓄積
-  battle.stats.turns++;
-  msgs.forEach(m => {
-    const dmg = m.match(/：(\d+)ダメージ/);
-    if (dmg) {
-      const v = parseInt(dmg[1]);
-      // P1の攻撃ログかどうかはP1の名前が含まれるかで判断
-      if (m.includes(p1.stats.nameJp)) battle.stats.p1dmg += v;
-      else                              battle.stats.p2dmg += v;
-    }
-    if (m.includes('【CRIT】')) {
-      if (m.includes(p1.stats.nameJp)) battle.stats.p1crits++;
-      else                              battle.stats.p2crits++;
-    }
-  });
-
   battle.turn++;
   updateBattleHUD();
   updateBattleHeader();
@@ -2829,7 +2820,6 @@ function startBattle() {
   battle.p2 = makeFighter(p2char, p2stats);
   battle.turn = 1;
   battle.phase = 'idle';
-  battle.stats = { turns:0, p1dmg:0, p2dmg:0, p1crits:0, p2crits:0 };
 
   $('battle-screen').classList.add('show');
   $('vs-screen').classList.remove('show');
@@ -3013,7 +3003,6 @@ function endBattle(winner) {
   battle.phase = 'end';
   const titleEl = $('battle-result-title');
   const subEl   = $('battle-result-sub');
-  const statsEl = $('battle-result-stats');
   if (winner === 'draw') {
     titleEl.textContent = 'DRAW'; titleEl.style.color = '#888';
     subEl.textContent = '引き分け';
@@ -3024,19 +3013,6 @@ function endBattle(winner) {
     titleEl.textContent = 'LOSE'; titleEl.style.color = 'var(--p2c)';
     subEl.textContent = `${battle.p2.stats.nameJp}の勝利！`;
   }
-
-  // 統計表示
-  const s = battle.stats;
-  const p1n = battle.p1.stats.nameJp;
-  const p2n = battle.p2.stats.nameJp;
-  statsEl.innerHTML = `
-    <div class="result-stat-row">
-      <div class="result-stat-item"><span class="result-stat-label">ターン数</span><span class="result-stat-val">${s.turns}</span></div>
-    </div>
-    <div class="result-stat-row">
-      <div class="result-stat-item"><span class="result-stat-label">${p1n} 与ダメージ</span><span class="result-stat-val" style="color:var(--p1c)">${s.p1dmg}</span></div>
-      <div class="result-stat-item"><span class="result-stat-label">${p2n} 与ダメージ</span><span class="result-stat-val" style="color:var(--p2c)">${s.p2dmg}</span></div>
-    </div>`;
 
   // 勝者キャラの背景画像を薄く表示
   const bgEl = $('battle-result-bg');

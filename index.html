@@ -1635,7 +1635,7 @@ function moveTo(idx, preview=true, dir=0) {
   idx = ((idx % len) + len) % len;
   const step = dir >= 0 ? 1 : -1;
   let tries = 0;
-  // P1：ボスをスキップ / P2：P1と同じカードをスキップ（ランダム選択時除く）
+  // PLAYER：ボスをスキップ / NPC：PLAYERと同じカードをスキップ（ランダム選択時除く）
   while (tries < len) {
     const ch = CHARS[idx];
     const skipBoss = state.phase === 'p1' && ch && ch.isNpcOnly;
@@ -1740,7 +1740,7 @@ function onDecide() {
   if (ph!=='p1' && ph!=='p2') return;
 
   let char = CHARS[state.curIdx];
-  // P1はボスを選択できない
+  // PLAYERはボスを選択できない
   if (ph === 'p1' && char.isNpcOnly) return;
   if (char.isRandom) {
     // ランダム解決は両者決定後にstartIntro直前で行う
@@ -1762,9 +1762,9 @@ function onDecide() {
   flash(); SE.confirm();
 
   if (ph==='p1') {
-    // P1 locked — switch to P2
+    // PLAYER選択完了 → NPCフェーズへ
     state.phase='p2';
-    // P1と同じidでない最初のカードに飛ぶ
+    // PLAYERと同じidでない最初のカードに飛ぶ
     const p1char = state.p1.char;
     let nextIdx = (state.p1.idx + 1) % (CHARS.length - 1);
     for (let n = 0; n < CHARS.length; n++) {
@@ -1778,7 +1778,7 @@ function onDecide() {
     if (!nextChar.isRandom) showPreview(nextChar);
     updatePhaseUI();
   } else {
-    // P2 locked — ランダムを解決してからintro
+    // NPC選択完了 → ランダム解決してintroへ
     state.phase='intro';
     updatePhaseUI();
     resolveRandom();
@@ -1800,7 +1800,7 @@ function updatePhaseUI() {
     const blockedByOther = !otherIsRandom && otherChar && ch && ch.id === otherChar.id;
     const blockedByNpc = ph === 'p1' && ch && ch.isNpcOnly;
     if (blockedByNpc) {
-      // P1フェーズではボスカードを完全非表示
+      // PLAYERフェーズではボスカードを完全非表示
       c.style.display = 'none';
     } else {
       c.style.display = '';
@@ -1826,13 +1826,13 @@ function updatePhaseUI() {
 function resolveRandom() {
   const nonRandom = CHARS.filter(c => !c.isRandom);
 
-  // P1がランダムの場合
+  // PLAYERがランダムの場合：ボスは選択不可
   if (CHARS[state.p1.idx] && CHARS[state.p1.idx].isRandom) {
-    const pool = nonRandom.filter(c => !state.p2.char || state.p2.char.isRandom || c.id !== state.p2.char.id);
+    const pool = nonRandom.filter(c => !c.isNpcOnly && (!state.p2.char || state.p2.char.isRandom || c.id !== state.p2.char.id));
     state.p1.char = pool[Math.floor(Math.random() * pool.length)];
   }
 
-  // P2がランダムの場合
+  // NPCがランダムの場合：ボスも含む
   if (CHARS[state.p2.idx] && CHARS[state.p2.idx].isRandom) {
     const pool = nonRandom.filter(c => !state.p1.char || c.id !== state.p1.char.id);
     state.p2.char = pool[Math.floor(Math.random() * pool.length)];
@@ -1869,7 +1869,7 @@ function startIntro() {
   const p2IsBoss = !!(p2char && p2char.isBoss);
   const p1IsBoss = !!(p1char && p1char.isBoss);
 
-  // P2登場（上ブロック）
+  // NPC登場（上ブロック）
   setTimeout(() => {
     if (p2IsBoss) {
       $('vs-wrap-p2').classList.add('boss-in');
@@ -1879,7 +1879,7 @@ function startIntro() {
     $('vs-name-p2').classList.add('show');
   }, T.VS_P2_SLIDE);
 
-  // P1登場（下ブロック）
+  // PLAYER登場（下ブロック）
   setTimeout(() => {
     if (p1IsBoss) {
       $('vs-wrap-p1').classList.add('boss-in');
@@ -2324,10 +2324,10 @@ const T = {
   PRELOAD_HIDE:   300,  // プリロード画面フェード後非表示
   SCREEN_HIDE:    650,  // プリロード画面非表示
   NAME_SHOW:      80,   // キャラ名フェードイン
-  INTRO_DELAY:    400,  // P2決定→イントロ開始
+  INTRO_DELAY:    400,  // NPC決定→イントロ開始
   RULE_SHOW:      300,  // バトル開始時ルール表示ディレイ
-  VS_P2_SLIDE:    120,  // VSスクリーンP2スライドイン
-  VS_P1_SLIDE:    320,  // VSスクリーンP1スライドイン
+  VS_P2_SLIDE:    120,  // VSスクリーンNPCスライドイン
+  VS_P1_SLIDE:    320,  // VSスクリーンPLAYERスライドイン
   VS_BADGE:       700,  // VSバッジ表示
   VS_SLASH:       950,  // スラッシュ演出
   VS_FLASH:       1120, // フラッシュ

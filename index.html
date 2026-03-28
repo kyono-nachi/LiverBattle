@@ -1067,7 +1067,8 @@ body::after {
 /* Result overlay */
 #battle-result {
   position:absolute; inset:0; z-index:20;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:32px;
   background:#000;
   opacity:0; pointer-events:none; transition:opacity 0.5s;
   overflow:hidden;
@@ -1081,6 +1082,7 @@ body::after {
 }
 #battle-result-bg.show { opacity:0.35; }
 #battle-result > *:not(#battle-result-bg) { position:relative; z-index:1; }
+#battle-result-info, #battle-result-btns { position:relative; z-index:1; }
 #battle-result-title {
   font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:8px;
   color:var(--gold); text-shadow:0 0 40px var(--gold)88;
@@ -1089,6 +1091,16 @@ body::after {
   font-family:'Noto Sans JP',sans-serif; font-size:14px; font-weight:900;
   letter-spacing:3px; color:#fff; opacity:0.8;
 }
+#battle-result-info { display:flex; flex-direction:column; align-items:center; gap:10px; }
+#battle-result-btns { display:flex; flex-direction:column; align-items:center; gap:10px; }
+#battle-result-rematch {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:5px;
+  color:#000; background:var(--p1c); border:none; cursor:pointer;
+  padding:12px 28px;
+  clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);
+  transition:filter 0.12s, transform 0.08s;
+}
+#battle-result-rematch:active { transform:scale(0.94); }
 #battle-result-log {
   font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:5px;
   color:#000; background:var(--gray); border:none; cursor:pointer;
@@ -1102,7 +1114,6 @@ body::after {
   color:#000; background:var(--gold); border:none; cursor:pointer;
   padding:12px 28px;
   clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);
-  margin-top:10px;
   transition:filter 0.12s, transform 0.08s;
 }
 #battle-result-back:active { transform:scale(0.94); }
@@ -1355,10 +1366,15 @@ body::after {
     </div>
     <div id="battle-result">
       <div id="battle-result-bg"></div>
-      <div id="battle-result-title">RESULT</div>
-      <div id="battle-result-sub"></div>
-      <button id="battle-result-back" onclick="returnToSelect()">RETURN TO SELECT</button>
-      <button id="battle-result-log" onclick="openLogModal()">BATTLE LOG</button>
+      <div id="battle-result-info">
+        <div id="battle-result-title">RESULT</div>
+        <div id="battle-result-sub"></div>
+      </div>
+      <div id="battle-result-btns">
+        <button id="battle-result-rematch" onclick="rematch()">REMATCH</button>
+        <button id="battle-result-back" onclick="returnToSelect()">RETURN TO SELECT</button>
+        <button id="battle-result-log" onclick="openLogModal()">BATTLE LOG</button>
+      </div>
     </div>
     <div id="log-modal">
       <div id="log-modal-inner">
@@ -2632,7 +2648,7 @@ function processMatchup(p1, p1a, p1m, p2, p2a, p2m, msgs) {
       msgs.push(`${p2.logName}のアタックがバリアを突き破る！`);
       atkHit(p2, p1, 'アタック'); break;
     case 'barrier_barrier': {
-      msgs.push('バリア vs バリア！なぜかダメージが発生する...');
+      msgs.push('バリア vs バリア！なぜかダメージが発生する！');
       const [first, second] = getSpdFirst(p1, p2);
       const d1 = luckyReduce(second, calcBarrierDmg(first), msgs);
       second.currentHp = Math.max(0, second.currentHp - d1);
@@ -3029,9 +3045,9 @@ function confirmAbort() {
 }
 
 /* ── バトル開始 ── */
-function startBattle() {
-  const p1char = state.p1.char;
-  const p2char = state.p2.char;
+function startBattle(p1charArg, p2charArg) {
+  const p1char = p1charArg || state.p1.char;
+  const p2char = p2charArg || state.p2.char;
   const p1stats = CHAR_STATS[p1char.charId];
   const p2stats = CHAR_STATS[p2char.charId];
   if (!p1stats || !p2stats) { console.warn('Unknown charId', p1char.charId, p2char.charId); resetAll(); return; }
@@ -3295,6 +3311,17 @@ function openLogModal() {
   $('log-modal').classList.add('show');
 }
 function closeLogModal() { $('log-modal').classList.remove('show'); }
+
+function rematch() {
+  const p1char = battle.p1 ? battle.p1.char : null;
+  const p2char = battle.p2 ? battle.p2.char : null;
+  if (!p1char || !p2char) { returnToSelect(); return; }
+  $('battle-result').classList.remove('show');
+  $('battle-result-bg').classList.remove('show');
+  $('log-modal').classList.remove('show');
+  clearBattleLog();
+  startBattle(p1char, p2char);
+}
 
 function returnToSelect() {
   $('battle-result').classList.remove('show');
